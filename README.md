@@ -7,7 +7,7 @@
 
 ## 🟢 مشاهده نمونه فعال
 👉 [مشاهده در تلگرام](https://t.me/HairStyleAssistantBot)  
-👉 [مشاهده در سایت](https://api.telbotland.ir/HairStyleAssistantBot)
+👉 [مشاهده در سایت](https://app.telbotland.ir/HairStyleAssistantBot)
 ---
 
 ## ⚙️ ویژگی‌های سیستم رزرو سالن
