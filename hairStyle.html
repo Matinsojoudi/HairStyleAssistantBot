@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>آرایشگاه - برنامه رزرو</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="status-indicator status-online" id="statusIndicator">
+        <i class="fas fa-wifi"></i> آنلاین
+    </div>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <i class="fas fa-cut"></i>
+                آرایشگاه
+            </h1>
+            <p>سیستم مدیریت رزرو و برنامه‌ریزی - هفته جاری</p>
+        </div>
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-number" id="totalReservations">0</div>
+                <div class="stat-label">رزرو این هفته</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="todayReservations">0</div>
+                <div class="stat-label">رزرو امروز</div>
+            </div>
+            <div class="services-ticker">
+                <div class="ticker-header">
+                    <i class="fas fa-scissors"></i> خدمات ماw
+                </div>
+                <div class="ticker-content-wrapper">
+                    <div class="ticker-content" id="servicesTicker">
+                        <div class="ticker-item">در حال بارگذاری خدمات...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="controls">
+            <div class="current-week-info" id="currentWeekInfo">
+                هفته جاری
+            </div>
+            <button class="refresh-btn" onclick="refreshData()">
+                <i class="fas fa-sync-alt"></i>
+                بروزرسانی
+            </button>
+        </div>
+        
+        <!-- بخش بهبود یافته رزروهای امروز -->
+        <div class="today-reservations-container" id="todayReservationsContainer" style="display: none;">
+            <h3 class="today-title">
+                <i class="fas fa-clock"></i>
+                رزروهای باقی‌مانده امروز
+            </h3>
+            <div class="today-reservations-grid" id="todayReservationsGrid">
+                <!-- کارت‌های رزرو در اینجا نمایش داده می‌شوند -->
+            </div>
+        </div>
+
+        <div class="schedule-grid">
+            <div class="loading" id="loadingIndicator">
+                در حال بارگذاری...
+                <i class="fas fa-spinner"></i>
+            </div>
+            <table class="schedule-table" id="scheduleTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ساعت</th>
+                        <th>شنبه</th>
+                        <th>یکشنبه</th>
+                        <th>دوشنبه</th>
+                        <th>سه‌شنبه</th>
+                        <th>چهارشنبه</th>
+                        <th>پنج‌شنبه</th>
+                        <th>جمعه</th>
+                    </tr>
+                </thead>
+                <tbody id="scheduleBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
