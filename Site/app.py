@@ -45,3 +45,38 @@ def receive_new_reservation():
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+        
+@app.route('/api/sync_full_data', methods=["POST"])
+def sync_full_data():
+    token = request.headers.get("Authorization")
+    if token != ";suirw[gjvno;hwiw[ue99348tylulig;]]":
+        return jsonify({"status": "error", "message": "Invalid token"}), 403
+
+    try:
+        data = request.get_json(force=True) or {}
+        db_path = data.get("database_name")
+        tables = data.get("tables")
+
+        if not db_path or not tables:
+            return jsonify({"status": "error", "message": "Missing data"}), 400
+
+        with sqlite3.connect(db_path) as conn:
+            c = conn.cursor()
+            # حذف رکوردهای قبلی (اختیاری، اگر می‌خواهی replace کنی)
+            for tname in tables.keys():
+                c.execute(f"DELETE FROM {tname}")
+            # درج رکورد جدید
+            for tname, rows in tables.items():
+                if not rows:
+                    continue
+                columns = rows[0].keys()
+                qmarks = ",".join(["?"] * len(columns))
+                for row in rows:
+                    values = [row[col] for col in columns]
+                    c.execute(
+                        f"INSERT INTO {tname} ({','.join(columns)}) VALUES ({qmarks})", values
+                    )
+            conn.commit()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
