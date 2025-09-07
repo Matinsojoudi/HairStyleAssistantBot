@@ -149,3 +149,101 @@ def search_all_users() -> int:
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM users")
         return int(c.fetchone()[0])
+
+# ================== Invites / Channels ==================
+def update_invited_channels(invited_chat_id, first_name, last_name):
+    if _check_user_existence(invited_chat_id):
+        try:
+            new_channels = ",".join(get_all_channels())
+            with _conn() as conn:
+                c = conn.cursor()
+                c.execute("""
+                    UPDATE invitations
+                    SET channels = ?
+                    WHERE invited_chat_id = ?
+                """, (new_channels, invited_chat_id))
+                conn.commit()
+
+            if _get_invitation_status(invited_chat_id) == "inactive":
+                inviter = _search_inviter_chatid(invited_chat_id)
+                _up_money_invite_number_for_invite(inviter, invited_chat_id, first_name, last_name)
+
+        except Exception:
+            _send_error_to_admin(traceback.format_exc())
+
+
+def get_all_channels() -> List[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT channel_id FROM channels")
+            channels = [row[0] for row in c.fetchall() if row[0] and str(row[0]).startswith("-100")]
+            return channels
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return []
+
+
+def is_member_in_all_channels(chat_id) -> bool:
+    for channel_id in get_all_channels():
+        member = _bot.get_chat_member(channel_id, chat_id)
+        if member.status not in ['member', 'administrator', 'creator']:
+            return False
+    return True
+
+
+def is_member_channel(chat_id, channel_id) -> bool:
+    member = _bot.get_chat_member(channel_id, chat_id)
+    return member.status in ['member', 'administrator', 'creator']
+
+
+def delete_channel_by_id(channel_id):
+    with _conn() as conn:
+        c = conn.cursor()
+        try:
+            c.execute("DELETE FROM channels WHERE id=?", (channel_id,))
+            conn.commit()
+            _bot.send_message(_settings.matin, f"Channel with id {channel_id} deleted successfully.")
+        except Exception:
+            conn.rollback()
+            _send_error_to_admin(traceback.format_exc())
+
+
+def make_delete_channel_id_keyboard():
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT * FROM channels ORDER BY id")
+            rows = c.fetchall()
+
+        keyboard = []
+        for row in rows:
+            # انتظار می‌رود ستون اول id و ستون دوم نام دکمه باشد؛ اگر اسکیما متفاوت است، مطابق DB خودتان تنظیم کنید
+            # مثال: (id, button_name, link_type, link, channel_chat_id)
+            row_id, button_name = row[0], row[1]
+            keyboard.append([InlineKeyboardButton(button_name, callback_data=f"delete_row_{row_id}")])
+
+        keyboard.append([InlineKeyboardButton("❌ خروج از منوی حذف کانال", callback_data="delete_button_1")])
+        return InlineKeyboardMarkup(keyboard)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return None
+
+
+def make_channel_id_keyboard():
+    try:
+        keyboard = []
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT button_name, link FROM channels ORDER BY id DESC LIMIT 10")
+            latest_channels = c.fetchall()
+
+        for name, link in latest_channels:
+            keyboard.append([types.InlineKeyboardButton(name, url=link)])
+
+        keyboard.append([types.InlineKeyboardButton("✅ عضو شدم!", url=f"{_settings.bot_link}?start=invite_{_settings.matin}")])
+
+        return types.InlineKeyboardMarkup(keyboard)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return None
