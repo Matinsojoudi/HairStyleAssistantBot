@@ -411,7 +411,7 @@ def save_admin_username(message):
         _bot.send_message(chat_id, f"آیدی پشتیبانی با موفقیت به {username} تغییر یافت.", reply_markup=_admin_markup)
     except Exception as e:
         _bot.send_message(_settings.matin, f"خطا در ذخیره آیدی پشتیبانی: {e}")
-        
+
 def _load_admin_username():
     global admin_username
     try:
@@ -445,6 +445,21 @@ def _init_charge_doc_channel_db():
     except Exception:
         _send_error_to_admin(traceback.format_exc())
 
+def save_charge_doc_channel_id(channel_id: int):
+    global charge_doc_channel_id
+    _init_charge_doc_channel_db()
+    charge_doc_channel_id = str(channel_id)
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO charge_doc_channel (id, channel_id) VALUES (1, ?)
+                ON CONFLICT(id) DO UPDATE SET channel_id=excluded.channel_id
+            """, (str(channel_id),))
+            conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+
 def _load_charge_doc_channel_id():
     global charge_doc_channel_id
     try:
@@ -457,7 +472,77 @@ def _load_charge_doc_channel_id():
     except Exception:
         pass
 
+def handle_forwarded_charge_doc_channel(message):
+    if _check_return_2(message):
+        return
+    chat_id = message.chat.id
+    if not getattr(message, "forward_from_chat", None):
+        msg = _bot.send_message(
+            chat_id,
+            "⚠️ <b>لطفاً حتماً یک پیام از کانال را به ربات فوروارد کنید.</b>\n\n"
+            "🔹 <b>قبل از فوروارد کردن پیام، باید ربات را به عنوان <u>ادمین</u> در آن کانال اضافه کنید.</b>\n"
+            "در غیر این صورت ربات نمی‌تواند کانال را شناسایی کند.\n\n"
+            "✅ مراحل: ۱) ربات را ادمین کنید ۲) یک پیام از همان کانال فوروارد کنید.",
+            reply_markup=_back_markup,
+            parse_mode="HTML"
+        )
+        _bot.register_next_step_handler(msg, handle_forwarded_charge_doc_channel)
+        return
+    channel_id = message.forward_from_chat.id
+    try:
+        _bot.send_message(channel_id, "✅ ربات با موفقیت در این کانال تنظیم شد.")
+        save_charge_doc_channel_id(channel_id)
+        _bot.send_message(chat_id, f"کانال اطلاع‌رسانی تنظیم شد.\nChat ID: <code>{channel_id}</code>", parse_mode="HTML", reply_markup=_admin_markup)
+    except Exception:
+        _bot.send_message(chat_id, "❌ ربات باید ادمین کانال باشد؛ عملیات متوقف شد.", reply_markup=_admin_markup)
+        _send_error_to_admin(traceback.format_exc())
+
 # ---------- تنظیم جایزه دعوت ----------
+def save_invite_diamond_count(message):
+    global invite_diamond_count
+    if _check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    diamond_count = (message.text or "").strip()
+
+    if not diamond_count.isdigit():
+        msg = _bot.send_message(
+            chat_id,
+            "❗️ <b>لطفاً فقط یک عدد ارسال کنید.</b>\nمثلاً: <code>5</code>",
+            reply_markup=_back_markup,
+            parse_mode="HTML"
+        )
+        _bot.register_next_step_handler(msg, save_invite_diamond_count)
+        return
+
+    invite_diamond_count = int(diamond_count)
+
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS invite_diamond_config (
+                    setting_key TEXT PRIMARY KEY,
+                    setting_value TEXT
+                )
+            """)
+            c.execute("""
+                INSERT INTO invite_diamond_config (setting_key, setting_value)
+                VALUES ('invite_reward', ?)
+                ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value
+            """, (diamond_count,))
+            conn.commit()
+
+        _bot.send_message(
+            chat_id,
+            f"✅ <b>مبلغ اعتبار جایزه به</b> <code>{diamond_count}</code> <b>تنظیم شد.</b>",
+            reply_markup=_admin_markup,
+            parse_mode="HTML"
+        )
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        
 def _load_invite_diamond_setting():
     global invite_diamond_count
     try:
