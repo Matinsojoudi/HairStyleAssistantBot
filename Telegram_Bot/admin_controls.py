@@ -301,6 +301,20 @@ def search_user_join_date(chat_id: int) -> Optional[str]:
         _bot.send_message(_settings.matin, text=f"new error in search_user_join_date\n\n{e}")
         return None
 
+# ---------- کانال‌های ضروری عضویت ----------
+def get_must_join_channel_ids() -> List[str]:
+    channel_ids: List[str] = []
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT channel_id FROM channels WHERE channel_id IS NOT NULL")
+            for (cid,) in c.fetchall():
+                if cid:
+                    channel_ids.append(cid)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+    return channel_ids
+
 # ---------- وضعیت‌های تایید شماره/بات ----------
 def _init_verify_status_db():
     global verify_active
@@ -354,8 +368,50 @@ def _init_bot_status_db():
     except Exception:
         _send_error_to_admin(traceback.format_exc())
 
-# ---------- آیدی پشتیبانی ----------
+def set_bot_active(value: bool):
+    global bot_active
+    bot_active = value
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE bot_status SET value=? WHERE key='bot_active'", (1 if value else 0,))
+            conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
 
+def is_bot_active() -> bool:
+    return bot_active
+
+# ---------- آیدی پشتیبانی ----------
+def save_admin_username(message):
+    global admin_username
+    if _check_return_2(message):
+        return
+    chat_id = message.chat.id
+    username = (message.text or "").strip()
+    if not username.startswith("@"):
+        msg = _bot.send_message(chat_id, "آیدی باید با @ شروع شود. لطفاً مجدداً ارسال کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, save_admin_username)
+        return
+    admin_username = username
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
+            c.execute("""
+                INSERT INTO bot_settings (key, value) VALUES ('admin_username', ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """, (username,))
+            conn.commit()
+        _bot.send_message(chat_id, f"آیدی پشتیبانی با موفقیت به {username} تغییر یافت.", reply_markup=_admin_markup)
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"خطا در ذخیره آیدی پشتیبانی: {e}")
+        
 def _load_admin_username():
     global admin_username
     try:
