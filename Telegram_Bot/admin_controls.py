@@ -87,6 +87,220 @@ def _ensure_channels_table():
                     )''')
         conn.commit()
 
+# ---------- فلو ساخت دکمه/کانال ----------
+def get_button_name(message):
+    if _check_return_2(message):
+        return
+    chat_id = message.chat.id
+    name = (message.text or "").strip()
+    if len(name) > 40:
+        msg = _bot.send_message(chat_id, "نام دکمه نباید بیشتر از ۴۰ کاراکتر باشد. لطفاً مجدداً ارسال کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_button_name)
+        return
+    _temp_data.setdefault(chat_id, {})
+    _temp_data[chat_id]['button_name'] = name
+    msg = _bot.send_message(chat_id, "لینک شما برای تلگرام است یا سایر موارد؟", reply_markup=create_selection_markup())
+    _bot.register_next_step_handler(msg, handle_link_type)
+
+
+def handle_link_type(message):
+    if _check_return_2(message):
+        return
+    chat_id = message.chat.id
+    selection = (message.text or "").strip()
+    _temp_data.setdefault(chat_id, {})
+    _temp_data[chat_id]["link_type"] = selection
+
+    if selection == "تلگرام":
+        msg = _bot.send_message(chat_id, "باشه! لینک یا آیدی کانال/گروه تلگرامی را بفرست (ربات باید ادمین باشد).", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_telegram_link)
+    elif selection == "سایر موارد":
+        msg = _bot.send_message(chat_id, "لینک سایت/ربات/اینستاگرام یا هر لینک دیگر را ارسال کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_other_link)
+    else:
+        # انتخاب نامعتبر
+        msg = _bot.send_message(chat_id, "گزینه معتبر نیست. «تلگرام» یا «سایر موارد» را انتخاب کنید.", reply_markup=create_selection_markup())
+        _bot.register_next_step_handler(msg, handle_link_type)
+
+
+def get_telegram_link(message):
+    if _check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    link = (message.text or "").strip()
+
+    # پشتیبانی از @id
+    if link.startswith("@"):
+        link = f"https://t.me/{link[1:]}"
+
+    # ولیدیشن لینک تلگرام
+    if not re.match(r"^https://t\.me/\S+$", link):
+        msg = _bot.send_message(chat_id, "لینک یا آیدی معتبر ارسال کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_telegram_link)
+        return
+
+    _temp_data.setdefault(chat_id, {})
+    _temp_data[chat_id]['link'] = link
+    msg = _bot.send_message(chat_id, "یک پیام از کانال/گروه فوروارد کن یا آیدی عددی را بفرست (باید با -100 شروع شود):", reply_markup=_back_markup)
+    _bot.register_next_step_handler(msg, get_telegram_id)
+
+
+def get_telegram_id(message):
+    if _check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    _temp_data.setdefault(chat_id, {})
+
+    if getattr(message, "forward_from_chat", None):
+        _temp_data[chat_id]["channel_id"] = message.forward_from_chat.id
+    elif (message.text or "").startswith("-100"):
+        _temp_data[chat_id]["channel_id"] = (message.text or "").strip()
+    else:
+        msg = _bot.send_message(chat_id, "آیدی عددی باید با -100 شروع شود. لطفاً مجدداً ارسال کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_telegram_id)
+        return
+
+    _save_channel_row(chat_id)
+
+
+def get_other_link(message):
+    if _check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    link = (message.text or "").strip()
+    _temp_data.setdefault(chat_id, {})
+    _temp_data[chat_id]["link"] = link
+
+    _save_channel_row(chat_id)
+
+
+def _save_channel_row(chat_id: int):
+    try:
+        data = _temp_data.get(chat_id, {})
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("BEGIN TRANSACTION")
+            c.execute('''CREATE TABLE IF NOT EXISTS channels (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            button_name TEXT NOT NULL,
+                            link_type TEXT NOT NULL,
+                            link TEXT NOT NULL,
+                            channel_id TEXT
+                        )''')
+            c.execute("INSERT INTO channels (button_name, link_type, link, channel_id) VALUES (?, ?, ?, ?)",
+                      (data.get("button_name"), data.get("link_type"), data.get("link"), data.get("channel_id")))
+            conn.commit()
+        _bot.send_message(chat_id, "✅ اطلاعات با موفقیت ذخیره شد.", reply_markup=_admin_markup)
+        _temp_data.pop(chat_id, None)
+    except Exception as e:
+        _bot.send_message(chat_id, "❌ خطا در ذخیره اطلاعات", reply_markup=_admin_markup)
+        _bot.send_message(_settings.matin, f"❌ خطا در ذخیره اطلاعات: {e}", reply_markup=_admin_markup)
+
+
+def create_selection_markup():
+    markup = _types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    markup.row("تلگرام", "سایر موارد")
+    markup.row("برگشت 🔙")
+    return markup
+
+# ---------- کیف پول/اعتبار ----------
+def less_user_money(chat_id: int, num: float) -> bool:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT money FROM users WHERE chat_id = ?", (chat_id,))
+            row = c.fetchone()
+            money_value = float(row[0]) if row and row[0] is not None else 0.0
+            num = float(num)
+
+            if money_value >= num:
+                new_money_value = money_value - num
+                c.execute("UPDATE users SET money = ? WHERE chat_id = ?", (new_money_value, chat_id))
+                conn.commit()
+                return True
+            else:
+                _bot.send_message(chat_id=chat_id, text="اعتبار شما جهت انجام این عملیات کافی نمی‌باشد، لطفاً ابتدا اعتبار خود را افزایش دهید.")
+                return False
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"خطا در کاهش اعتبار: {e}")
+        return False
+
+
+def add_money(chat_id: int, amount: int):
+    amount = int(amount)
+    with _conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT money FROM users WHERE chat_id = ?", (chat_id,))
+        row = c.fetchone()
+        current_money = row[0] if row and row[0] is not None else 0
+        new_money = current_money + amount
+        # UPSERT
+        c.execute("""INSERT INTO users (chat_id, money) VALUES (?, ?)
+                     ON CONFLICT(chat_id) DO UPDATE SET money = excluded.money""",
+                  (chat_id, new_money))
+        conn.commit()
+
+
+def up_user_money_by_admin_request(num: int, message):
+    if _check_return_2(message):
+        return
+    msg = _bot.send_message(message.chat.id, text="لطفا چت آیدی فرد مورد نظر را وارد نمایید:")
+    _bot.register_next_step_handler(msg, lambda m: up_user_money_by_admin(chat_id=m.text, num=num, message=message))
+
+
+def up_user_money_by_admin(chat_id: str, num: int, message):
+    if chat_id == "برگشت 🔙":
+        _bot.send_message(message.chat.id, "به منوی ادمین برگشتید.", reply_markup=_admin_markup)
+        return
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT money FROM users WHERE chat_id = ?", (chat_id,))
+            row = c.fetchone()
+            money_value = int(row[0]) if row and row[0] is not None else 0
+            new_money_value = money_value + int(num)
+            c.execute("UPDATE users SET money = ? WHERE chat_id = ?", (new_money_value, chat_id))
+            conn.commit()
+
+        _bot.send_message(int(chat_id), f'اعتبار شما افزایش یافت.\nمقدار کل اعتبار شما: {new_money_value}', reply_markup=_main_markup)
+        _bot.send_message(message.chat.id, f'تومان ({chat_id}) افزایش یافت.\nمقدار کل اعتبار: {new_money_value}', reply_markup=_main_markup)
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"خطا در افزایش امتیاز: {e}")
+
+
+def read_and_extract_top_users(database_path: str) -> Optional[List[int]]:
+    conn = sqlite3.connect(database_path)
+    c = conn.cursor()
+    try:
+        conn.execute("BEGIN TRANSACTION")
+        c.execute("SELECT chat_id, invited_users FROM users")
+        data = c.fetchall()
+        sorted_data = sorted(data, key=lambda x: (x[1] or 0), reverse=True)
+        top_10_users = [int(chat_id) for chat_id, _ in sorted_data[:10]]
+        conn.commit()
+        return top_10_users
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"Error occurred: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+def search_user_join_date(chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT joined_at FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_join_date\n\n{e}")
+        return None
+
 # ---------- وضعیت‌های تایید شماره/بات ----------
 def _init_verify_status_db():
     global verify_active
