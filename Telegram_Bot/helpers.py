@@ -87,3 +87,17 @@ def get_current_timestamp():
 
 def get_current_date():
     return jdatetime.now().strftime("%Y-%m-%d")
+
+# ================== DB Utils ==================
+def _conn():
+    return sqlite3.connect(_settings.database)
+
+def create_block_list_table():
+    with _conn() as conn:
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS block_list (
+                chat_id INTEGER PRIMARY KEY
+            )
+        """)
+        conn.commit()
