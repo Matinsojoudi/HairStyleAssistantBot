@@ -101,3 +101,45 @@ def create_block_list_table():
             )
         """)
         conn.commit()
+
+# ================== Users ==================
+def save_info(user_id, first_name, last_name, chat_id, user_name):
+    try:
+        update_block_list(chat_id, "delete")
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS users (
+                            chat_id INTEGER PRIMARY KEY,
+                            user_id INTEGER,
+                            money INTEGER,
+                            invited_users INTEGER,
+                            inviter_chatid INTEGER,
+                            phone_number TEXT,
+                            verify TEXT,
+                            joined_at TEXT,
+                            first_name TEXT,
+                            last_name TEXT,
+                            user_name TEXT
+                        )''')
+
+            c.execute("SELECT 1 FROM users WHERE chat_id=?", (chat_id,))
+            exists = c.fetchone() is not None
+
+            if exists:
+                c.execute("""UPDATE users
+                             SET first_name=?, last_name=?, user_name=?
+                             WHERE chat_id=?""",
+                          (first_name, last_name, user_name, chat_id))
+            else:
+                joined_at = str(get_current_date())
+                c.execute("""INSERT INTO users
+                             (chat_id, user_id, money, invited_users, inviter_chatid,
+                              phone_number, verify, joined_at, first_name, last_name, user_name)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                          (chat_id, user_id, 0, 0, None, None, None, joined_at,
+                           first_name, last_name, user_name))
+            conn.commit()
+
+        update_invited_channels(chat_id, first_name, last_name)
+    except sqlite3.Error as e:
+        _bot.send_message(_settings.matin, f"An error occurred in save_info for {chat_id}:\n{e}")
