@@ -143,3 +143,9 @@ def save_info(user_id, first_name, last_name, chat_id, user_name):
         update_invited_channels(chat_id, first_name, last_name)
     except sqlite3.Error as e:
         _bot.send_message(_settings.matin, f"An error occurred in save_info for {chat_id}:\n{e}")
+
+def search_all_users() -> int:
+    with _conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM users")
+        return int(c.fetchone()[0])
