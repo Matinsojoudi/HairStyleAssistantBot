@@ -115,3 +115,22 @@ def get_all_data():
         return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ANY_NAME')
+def barbershop_panel():
+    if os.path.exists("templates/barbershop.html"):
+        return render_template('barbershop.html')
+    else:
+        return jsonify({"error": "Template not found"}), 404
+
+
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Not found"}), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "Internal server error"}), 500
