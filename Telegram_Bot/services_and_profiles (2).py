@@ -230,6 +230,54 @@ def ask_continue_staff(message):
         _bot.register_next_step_handler(msg, ask_continue_staff)
 
 
+# ========== User Info ==========
+def check_user_info_exists(chat_id: int) -> bool:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM user_info WHERE chat_id=?", (chat_id,))
+            return c.fetchone() is not None
+    except Exception as e:
+        print(f"خطا در بررسی اطلاعات کاربر: {e}")
+        return False
+
+def save_user_info(chat_id: int, full_name: str, phone_number: str) -> bool:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT OR REPLACE INTO user_info (chat_id, full_name, phone_number)
+                VALUES (?, ?, ?)
+            """, (chat_id, full_name, phone_number))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"خطا در ذخیره اطلاعات کاربر: {e}")
+        return False
+
+def get_user_info(chat_id: int) -> Optional[dict]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                SELECT chat_id, full_name, phone_number, created_at
+                FROM user_info WHERE chat_id=?
+            """, (chat_id,))
+            result = c.fetchone()
+            if result:
+                return {
+                    'chat_id': result[0],
+                    'full_name': result[1],
+                    'phone_number': result[2],
+                    'created_at': result[3]
+                }
+    except Exception as e:
+        print(f"خطا در استخراج اطلاعات کاربر: {e}")
+    return None
+
+
+
+
 
 
 
