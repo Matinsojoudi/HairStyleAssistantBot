@@ -1,0 +1,6 @@
+flask                  # Flask, request, jsonify, send_file, Response, render_template, ...
+requests               # requests
+beautifulsoup4         # bs4 → BeautifulSoup
+pytz                   # pytz
+pytelegrambotapi       # telebot و telebot.types
+jdatetime              # تاریخ شمسی
