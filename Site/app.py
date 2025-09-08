@@ -13,6 +13,10 @@ import os
 
 app = Flask(__name__)
 
+# تنظیمات barbershop
+SECRET_TOKEN = "CHANGE_ME_TOKEN"
+BARBERSHOP_DB_PATH = "CHANGE_ME.db"
+
 @app.route('/api/new_reservation', methods=["POST"])
 def receive_new_reservation():
     token = request.headers.get("Authorization")
@@ -80,3 +84,34 @@ def sync_full_data():
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/barbershop_data', methods=['GET'])
+def get_all_data():
+    token = request.headers.get('Authorization')
+    if token != SECRET_TOKEN:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        db_path = request.args.get("database", BARBERSHOP_DB_PATH)
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+
+        def fetch_table(table):
+            try:
+                c.execute(f"SELECT * FROM {table}")
+                cols = [col[0] for col in c.description]
+                return [dict(zip(cols, row)) for row in c.fetchall()]
+            except sqlite3.OperationalError:
+                return []
+
+        data = {
+            "reservations": fetch_table("reservations"),
+            "users": fetch_table("users"),
+            "user_info": fetch_table("user_info"),
+            "staff": fetch_table("staff"),
+            "services": fetch_table("services"),
+        }
+        conn.close()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
