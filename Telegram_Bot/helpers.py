@@ -247,3 +247,78 @@ def make_channel_id_keyboard():
     except Exception:
         _send_error_to_admin(traceback.format_exc())
         return None
+
+# ================== Admin List ==================
+def save_new_admin(admin_id, message):
+    if admin_id == "برگشت 🔙":
+        _bot.send_message(message.chat.id, "به منوی ادمین برگشتید.", reply_markup=_admin_markup)
+        return
+
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("BEGIN TRANSACTION")
+            c.execute('''CREATE TABLE IF NOT EXISTS admin_list (
+                            id INTEGER PRIMARY KEY,
+                            admin_id INTEGER
+                        )''')
+            c.execute("INSERT INTO admin_list (admin_id) VALUES (?)", (admin_id,))
+            conn.commit()
+        _bot.send_message(message.chat.id, "ادمین مورد نظر با موفقیت افزوده شد.", reply_markup=_admin_markup)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        _bot.send_message(message.chat.id, "Error in save_new_admin.", reply_markup=_admin_markup)
+
+
+def make_delete_admin_list_keyboard():
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT * FROM admin_list ORDER BY id")
+            rows = c.fetchall()
+
+        keyboard = []
+        for row in rows:
+            # انتظار: (id, admin_id)
+            row_id, admin_id = row[0], row[1]
+            keyboard.append([InlineKeyboardButton(str(admin_id), callback_data=f"delete_row_admin_{row_id}")])
+
+        keyboard.append([InlineKeyboardButton("❌ خروج از منوی حذف ادمین", callback_data="delete_button_1")])
+        return InlineKeyboardMarkup(keyboard)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return None
+
+
+def delete_admin_by_id(admin_id):
+    with _conn() as conn:
+        c = conn.cursor()
+        try:
+            c.execute("DELETE FROM admin_list WHERE id=?", (admin_id,))
+            conn.commit()
+            _bot.send_message(_settings.matin, f"Admin with id {admin_id} deleted successfully.")
+        except Exception:
+            conn.rollback()
+            _send_error_to_admin(traceback.format_exc())
+
+
+def get_admin_ids():
+    return get_ids_from_db("admin_list", "admin_id")
+
+
+def get_ids_from_db(table_name, column_name) -> List[int]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute(f"SELECT {column_name} FROM {table_name}")
+            return [row[0] for row in c.fetchall()]
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"Error in get_ids_from_db: {e}")
+        return []
+
+
+def check_admin_id_exists(admin_id) -> bool:
+    with _conn() as conn:
+        c = conn.cursor()
+        c.execute('SELECT 1 FROM crush_admin_info WHERE admin_id = ?', (admin_id,))
+        return c.fetchone() is not None
