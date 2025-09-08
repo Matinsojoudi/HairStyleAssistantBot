@@ -188,6 +188,49 @@ def ask_continue_service(message):
         _bot.register_next_step_handler(msg, ask_continue_service)
 
 
+# ========== Staff Flow ==========
+def get_staff_name(message):
+    if check_return(message):
+        return
+    chat_id = message.chat.id
+    staff_name = (message.text or "").strip()
+
+    if len(staff_name) < 2:
+        msg = _bot.send_message(chat_id, "❌ نام پرسنل باید حداقل 2 کاراکتر باشد. مجدداً وارد کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_staff_name)
+        return
+
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO staff (name) VALUES (?)", (staff_name,))
+            conn.commit()
+
+        _bot.send_message(
+            chat_id,
+            f"✅ پرسنل جدید اضافه شد:\n\n👤 نام: {staff_name}",
+            reply_markup=_continue_markup
+        )
+        _bot.register_next_step_handler_by_chat_id(chat_id, ask_continue_staff)
+    except Exception as e:
+        _bot.send_message(chat_id, f"❌ خطا در افزودن پرسنل: {e}", reply_markup=_admin_markup)
+
+def ask_continue_staff(message):
+    if check_return(message):
+        return
+    chat_id = message.chat.id
+
+    if message.text == "✅ تمام شد":
+        _bot.send_message(chat_id, "✅ افزودن پرسنل با موفقیت انجام شد", reply_markup=_admin_markup)
+    elif message.text == "➕ ادامه":
+        msg = _bot.send_message(chat_id, "👤 نام پرسنل بعدی را وارد کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_staff_name)
+    else:
+        msg = _bot.send_message(chat_id, "لطفاً از دکمه‌ها استفاده کنید:", reply_markup=_continue_markup)
+        _bot.register_next_step_handler(msg, ask_continue_staff)
+
+
+
 
 
 
