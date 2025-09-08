@@ -131,6 +131,63 @@ def get_weekday_name_fa(day_num: int) -> str:
     days = ['دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه', 'یکشنبه']
     return days[day_num % 7]
 
+# ========== Services Flow ==========
+def get_service_name(message):
+    if check_return(message):
+        return
+    chat_id = message.chat.id
+    service_name = (message.text or "").strip()
+
+    if len(service_name) < 2:
+        msg = _bot.send_message(chat_id, "❌ نام خدمت باید حداقل 2 کاراکتر باشد. مجدداً وارد کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_service_name)
+        return
+
+    msg = _bot.send_message(
+        chat_id,
+        f"💰 قیمت خدمت «{service_name}» را به تومان وارد کنید:\n\nمثال: 50000",
+        reply_markup=_back_markup
+    )
+    _bot.register_next_step_handler(msg, lambda m: get_service_price(m, service_name))
+
+def get_service_price(message, service_name: str):
+    if check_return(message):
+        return
+    chat_id = message.chat.id
+    try:
+        price = int((message.text or "").strip())
+        if price <= 0:
+            raise ValueError("positive")
+
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO services (name, price) VALUES (?, ?)", (service_name, price))
+            conn.commit()
+
+        _bot.send_message(
+            chat_id,
+            f"✅ خدمت جدید اضافه شد:\n\n📝 نام: {service_name}\n💰 قیمت: {price:,} تومان",
+            reply_markup=_continue_markup
+        )
+        _bot.register_next_step_handler_by_chat_id(chat_id, ask_continue_service)
+    except Exception:
+        msg = _bot.send_message(chat_id, "❌ قیمت باید عدد صحیح باشد. مجدداً وارد کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, lambda m: get_service_price(m, service_name))
+
+def ask_continue_service(message):
+    if check_return(message):
+        return
+    chat_id = message.chat.id
+    if message.text == "✅ تمام شد":
+        _bot.send_message(chat_id, "✅ تنظیمات خدمات با موفقیت انجام شد", reply_markup=_admin_markup)
+    elif message.text == "➕ ادامه":
+        msg = _bot.send_message(chat_id, "💇🏻‍♂️ نام خدمت بعدی را وارد کنید:", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, get_service_name)
+    else:
+        msg = _bot.send_message(chat_id, "لطفاً از دکمه‌ها استفاده کنید:", reply_markup=_continue_markup)
+        _bot.register_next_step_handler(msg, ask_continue_service)
+
+
 
 
 
