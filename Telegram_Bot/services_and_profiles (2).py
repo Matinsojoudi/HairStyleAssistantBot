@@ -102,5 +102,39 @@ def create_tables():
         _send_error_to_admin(traceback.format_exc())
 
 
+# ========== Utilities ==========
+def is_admin(chat_id) -> bool:
+    try:
+        chat_id = int(chat_id)
+    except (ValueError, TypeError):
+        return False
+    if hasattr(_settings, "admin_list") and chat_id in getattr(_settings, "admin_list"):
+        return True
+    return chat_id in set(_get_admin_ids())
+
+def check_return(message) -> bool:
+    """بررسی دکمه بازگشت (نسخه مستقل برای این فلو)"""
+    if getattr(message, "text", None) == "برگشت 🔙":
+        chat_id = message.chat.id
+        if is_admin(chat_id):
+            _bot.send_message(chat_id, "🔙 بازگشت به پنل ادمین", reply_markup=_admin_markup)
+        else:
+            _bot.send_message(chat_id, "✅ به منوی اصلی برگشتید", reply_markup=_main_markup)
+        return True
+    return False
+
+def get_current_datetime():
+    iran_tz = pytz.timezone('Asia/Tehran')
+    return datetime.now(iran_tz)
+
+def get_weekday_name_fa(day_num: int) -> str:
+    days = ['دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه', 'یکشنبه']
+    return days[day_num % 7]
+
+
+
+
+
+
 
 
