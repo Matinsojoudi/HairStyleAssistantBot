@@ -88,6 +88,173 @@ def create_invitations_table():
         """)
         conn.commit()
 
+def update_inviter_chatid(inviter: int, invited: int):
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE users SET inviter_chatid = ? WHERE chat_id = ?", (inviter, invited))
+            conn.commit()
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"خطا در بروزرسانی inviter_chatid: {e}")
+
+
+def invitation_record_exists(invited_chat_id: int) -> bool:
+    """
+    بررسی وجود رکورد دعوت برای یک invited_chat_id
+    """
+    try:
+        with _conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM invitations WHERE invited_chat_id = ?", (invited_chat_id,))
+            return cur.fetchone() is not None
+    except Exception:
+        _bot.send_message(_settings.matin, "Error in invite check.")
+        return False
+
+
+# برای سازگاری با کد قدیمی که نام گمراه‌کننده داشت:
+check_user_existence = invitation_record_exists
+
+
+def new_invite_to_bot(inviter: int, invited: int, invited_Firstname: str, invited_Lastname: str):
+    """
+    اگر قبلاً رکورد دعوت برای invited وجود نداشت، شمارنده‌ی دعوت‌های inviter را بالا ببرد.
+    """
+    if not invitation_record_exists(invited):
+        up_money_invite_number_for_invite(inviter, invited, invited_Firstname, invited_Lastname)
+
+
+def save_invitation(invited_chat_id: int, inviter_chat_id: int):
+    """
+    ذخیره‌ی رکورد دعوت جدید (اگر قبلاً برای invited ذخیره نشده).
+    """
+    if invitation_record_exists(invited_chat_id):
+        return
+    try:
+        channels = ",".join(_get_all_channels())
+        timestamp = _get_current_timestamp()
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO invitations (invited_chat_id, inviter_chat_id, timestamp, channels, status, gift_given, gift_amount)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (invited_chat_id, inviter_chat_id, timestamp, channels, 'active', 0, 0))
+            conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+
+
+def give_gift_to_inviter_if_needed(invited_chat_id: int):
+    """
+    اگر برای دعوتِ این کاربر هدیه‌ای داده نشده بود، به دعوت‌کننده هدیه بده و وضعیت را آپدیت کن.
+    """
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT inviter_chat_id, gift_given FROM invitations WHERE invited_chat_id = ?", (invited_chat_id,))
+            row = c.fetchone()
+            if not row:
+                return
+            inviter_chat_id, gift_given = row
+            if gift_given:
+                return
+
+            gift_amount = int(_invite_diamond_count) if _invite_diamond_count else 0
+
+            # افزایش موجودی دعوت‌کننده
+            c.execute("SELECT money FROM users WHERE chat_id = ?", (inviter_chat_id,))
+            money_row = c.fetchone()
+            current_money = (money_row[0] if money_row and money_row[0] is not None else 0)
+            new_money = current_money + gift_amount
+            c.execute("UPDATE users SET money = ? WHERE chat_id = ?", (new_money, inviter_chat_id))
+
+            # ثبت هدیه
+            c.execute("UPDATE invitations SET gift_given = 1, gift_amount = ? WHERE invited_chat_id = ?", (gift_amount, invited_chat_id))
+            conn.commit()
+
+        # اطلاع به دعوت‌کننده
+        if gift_amount > 0:
+            _bot.send_message(inviter_chat_id, f"🎁 به خاطر فعال‌سازی کاربر دعوت‌شده، {gift_amount} به اعتبار شما افزوده شد!")
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+
+
+def get_invitation_status(invited_chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT status FROM invitations WHERE invited_chat_id = ?", (invited_chat_id,))
+            res = c.fetchone()
+            return res[0] if res else None
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return None
+
+
+def update_invitation_status(invited_chat_id: int):
+    """
+    اگر رکوردی وجود دارد و وضعیت inactive بود، active کن.
+    """
+    if not invitation_record_exists(invited_chat_id):
+        return
+    try:
+        if get_invitation_status(invited_chat_id) == "inactive":
+            with _conn() as conn:
+                c = conn.cursor()
+                c.execute("UPDATE invitations SET status = ? WHERE invited_chat_id = ?", ("active", invited_chat_id))
+                conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+
+
+def up_money_invite_number_for_invite(chat_id: int, invited: int, invited_Firstname: str, invited_Lastname: str):
+    """
+    +1 به invited_users در جدول users و اطلاع رسانی به دعوت‌کننده؛ سپس وضعیت دعوت را آپدیت می‌کند.
+    """
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT invited_users FROM users WHERE chat_id = ?", (chat_id,))
+            row = c.fetchone()
+            invited_users_value = (row[0] if row and row[0] is not None else 0) + 1
+            c.execute("UPDATE users SET invited_users = ? WHERE chat_id = ?", (invited_users_value, chat_id))
+            conn.commit()
+
+        # پیام به دعوت‌کننده
+        del_btn_kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ متوجه شدم", callback_data=f"delete_button_{chat_id}")]])
+        _bot.send_message(
+            chat_id,
+            f"کاربر {invited_Firstname} {invited_Lastname}\nبا لینک دعوت شما به ربات پیوست.",
+            reply_markup=del_btn_kb
+        )
+
+        update_invitation_status(invited)
+    except Exception as e:
+        _bot.send_message(_settings.matin, f"خطا در افزایش تعداد کاربران دعوت شده: {e}")
+
+
+def search_inviter_chatid(chat_id: int) -> Optional[int]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT inviter_chatid FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_inviter_chatid\n\n{e}")
+        return None
+
+
+def search_user_invited_users(chat_id: int) -> Optional[int]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT invited_users FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_invited_users\n\n{e}")
+        
 # ================= فایل‌های آپلودی =================
 def create_uploaded_files_table():
     try:
