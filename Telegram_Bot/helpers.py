@@ -322,3 +322,184 @@ def check_admin_id_exists(admin_id) -> bool:
         c = conn.cursor()
         c.execute('SELECT 1 FROM crush_admin_info WHERE admin_id = ?', (admin_id,))
         return c.fetchone() is not None
+
+# ================== Block List ==================
+def update_block_list(chat_id, operation: str) -> bool:
+    with _conn() as conn:
+        c = conn.cursor()
+        if operation.lower() == "add":
+            c.execute("SELECT chat_id FROM block_list WHERE chat_id = ?", (chat_id,))
+            if not (c.fetchone()):
+                c.execute("INSERT INTO block_list (chat_id) VALUES (?)", (chat_id,))
+                conn.commit()
+                return True
+        elif operation.lower() == "delete":
+            c.execute("SELECT chat_id FROM block_list WHERE chat_id = ?", (chat_id,))
+            if c.fetchone():
+                c.execute("DELETE FROM block_list WHERE chat_id = ?", (chat_id,))
+                conn.commit()
+                return True
+        return False
+
+
+# ================== Broadcast ==================
+def confirm_send_all_users(message):
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    keyboard.add(types.KeyboardButton("✔ مطمئن هستم"))
+    keyboard.add(types.KeyboardButton("❌ انصراف از ارسال"))
+
+    msg = _bot.send_message(message.chat.id, "آیا مطمئن هستید که می‌خواهید این پیام را همگانی ارسال کنید؟", reply_markup=keyboard)
+    _bot.register_next_step_handler(msg, lambda response: process_confirmation_send_all_users(response, message))
+
+
+def process_confirmation_send_all_users(user_response, original_message):
+    if user_response.text == "✔ مطمئن هستم":
+        send_all_users(original_message)
+    else:
+        _bot.send_message(user_response.chat.id, "❌ ارسال پیام همگانی لغو شد.", reply_markup=_admin_markup)
+
+
+def send_admin_public_msg(message):
+    chat_id = message.chat.id
+    if message.content_type == 'text':
+        _bot.send_message(chat_id, message.text, reply_markup=_main_markup)
+    elif message.content_type == 'photo':
+        caption = message.caption if message.caption else " "
+        _bot.send_photo(chat_id, message.photo[-1].file_id, caption=caption, reply_markup=_main_markup)
+    elif message.content_type == 'video':
+        caption = message.caption if message.caption else " "
+        _bot.send_video(chat_id, message.video.file_id, caption=caption, reply_markup=_main_markup)
+    elif message.content_type == 'audio':
+        caption = message.caption if message.caption else " "
+        _bot.send_audio(chat_id, message.audio.file_id, caption=caption, reply_markup=_main_markup)
+    elif message.content_type == 'document':
+        caption = message.caption if message.caption else " "
+        _bot.send_document(chat_id, message.document.file_id, caption=caption, reply_markup=_main_markup)
+    elif message.content_type == 'sticker':
+        _bot.send_sticker(chat_id, message.sticker.file_id, reply_markup=_main_markup)
+    elif message.content_type == 'voice':
+        caption = message.caption if message.caption else " "
+        _bot.send_voice(chat_id, message.voice.file_id, caption=caption, reply_markup=_main_markup)
+    elif message.content_type == 'animation':
+        caption = message.caption if message.caption else " "
+        _bot.send_animation(chat_id, message.animation.file_id, caption=caption, reply_markup=_main_markup)
+    elif message.content_type == 'video_note':
+        _bot.send_video_note(chat_id, message.video_note.file_id, reply_markup=_main_markup)
+
+
+def send_all_users(message):
+    if _check_return_2(message):
+        return
+
+    # اعلان شروع
+    with _conn() as conn:
+        c = conn.cursor()
+        try:
+            c.execute("SELECT COUNT(chat_id) FROM users WHERE chat_id NOT IN (SELECT chat_id FROM block_list)")
+            total_users = c.fetchone()[0]
+
+            groups_of_20 = total_users // 20
+            remainder = total_users % 20
+            send_time = groups_of_20 * 1.5
+            if remainder > 0:
+                send_time += 1.5
+            estimated_time = round(send_time / 60, 2)
+
+            start_message = (
+                f"🚀 عملیات ارسال پیام همگانی آغاز شد!\n\n"
+                f"👥 تعداد کل کاربران فعال: {total_users}\n"
+                f"⏳ زمان تقریبی اتمام ارسال: {estimated_time} دقیقه."
+            )
+
+            _bot.send_message(message.chat.id, start_message, reply_markup=_admin_markup)
+            _bot.send_message(_settings.matin, start_message, reply_markup=_admin_markup)
+
+            emergency_markup = InlineKeyboardMarkup()
+            emergency_markup.add(InlineKeyboardButton("⛔ توقف اضطراری", callback_data="confirm_stop_broadcast"))
+
+            send_admin_public_msg(message)
+            _bot.send_message(message.chat.id, "⚠ جهت توقف اضطراری دکمه زیر را کلیک کنید:", reply_markup=emergency_markup)
+
+        except Exception as e:
+            _bot.send_message(_settings.matin, text=f"❌ Error during calculating total users:\n{e}")
+            return
+
+    # اجرای ارسال در نخ جدا
+    _stop_event.clear()
+
+    def _worker():
+        with _conn() as conn:
+            c = conn.cursor()
+            try:
+                c.execute("SELECT chat_id FROM users WHERE chat_id NOT IN (SELECT chat_id FROM block_list)")
+                all_chat_ids = c.fetchall()
+
+                not_send = 0
+                batch_20 = 0
+                progress = 0
+
+                for idx, (chat_id,) in enumerate(all_chat_ids):
+                    if _stop_event.is_set():
+                        _bot.send_message(message.chat.id, "⛔ عملیات ارسال پیام متوقف شد!")
+                        _bot.send_message(message.chat.id, f"🔘 ارسال پیام متوقف شد! تعداد ارسال‌شده: {progress} نفر")
+                        _bot.send_message(_settings.matin, "⛔ عملیات ارسال پیام متوقف شد!")
+                        _bot.send_message(_settings.matin, f"🔘 ارسال پیام متوقف شد! تعداد ارسال‌شده: {progress} نفر")
+                        return
+
+                    try:
+                        # فوروارد/بازارسال همان پیام ادمین به کاربر
+                        if message.content_type == 'text':
+                            _bot.send_message(chat_id, message.text, reply_markup=_main_markup)
+                        elif message.content_type == 'photo':
+                            caption = message.caption if message.caption else " "
+                            _bot.send_photo(chat_id, message.photo[-1].file_id, caption=caption, reply_markup=_main_markup)
+                        elif message.content_type == 'video':
+                            caption = message.caption if message.caption else " "
+                            _bot.send_video(chat_id, message.video.file_id, caption=caption, reply_markup=_main_markup)
+                        elif message.content_type == 'audio':
+                            caption = message.caption if message.caption else " "
+                            _bot.send_audio(chat_id, message.audio.file_id, caption=caption, reply_markup=_main_markup)
+                        elif message.content_type == 'document':
+                            caption = message.caption if message.caption else " "
+                            _bot.send_document(chat_id, message.document.file_id, caption=caption, reply_markup=_main_markup)
+                        elif message.content_type == 'sticker':
+                            _bot.send_sticker(chat_id, message.sticker.file_id, reply_markup=_main_markup)
+                        elif message.content_type == 'voice':
+                            caption = message.caption if message.caption else " "
+                            _bot.send_voice(chat_id, message.voice.file_id, caption=caption, reply_markup=_main_markup)
+                        elif message.content_type == 'animation':
+                            caption = message.caption if message.caption else " "
+                            _bot.send_animation(chat_id, message.animation.file_id, caption=caption, reply_markup=_main_markup)
+                        elif message.content_type == 'video_note':
+                            _bot.send_video_note(chat_id, message.video_note.file_id, reply_markup=_main_markup)
+
+                        batch_20 += 1
+                        progress += 1
+
+                        if batch_20 == 20:
+                            time.sleep(1.5)
+                            batch_20 = 0
+
+                        if progress % 1000 == 0:
+                            progress_message = f"✅ گزارش پیشرفت: تاکنون پیام به {progress} نفر ارسال شد."
+                            _bot.send_message(_settings.matin, text=progress_message)
+                            if hasattr(_settings, "admin"):
+                                _bot.send_message(_settings.admin, text=progress_message)
+
+                    except Exception:
+                        not_send += 1
+                        update_block_list(chat_id, "add")
+                        continue
+
+                sent = total_users - not_send
+                final_message = (
+                    f"🎉 عملیات ارسال پیام تکمیل شد!\n\n"
+                    f"✅ پیام شما به {sent} نفر از کل {total_users} کاربر ارسال شد."
+                )
+                _bot.send_message(message.chat.id, text=final_message, reply_markup=_admin_markup)
+                _bot.send_message(_settings.matin, text=final_message, reply_markup=_admin_markup)
+
+            except Exception as e:
+                _bot.send_message(_settings.matin, text=f"❌ Error during sending messages:\n{e}")
+
+    threading.Thread(target=_worker, daemon=True).start()
