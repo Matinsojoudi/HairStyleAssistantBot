@@ -99,4 +99,48 @@ def init_payments(
     _init_card_table()
     _load_cards()
 
+# ========== DB UTILS ==========
+def _conn():
+    return sqlite3.connect(_settings.database)
+
+
+# ========== TRANSACTIONS ==========
+def _create_transactions_table():
+    with _conn() as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id INTEGER,
+            amount INTEGER,
+            tracking_code TEXT UNIQUE,
+            status TEXT DEFAULT 'pending'
+        )
+        """)
+
+def _save_money_info(chat_id: int, amount: int) -> str:
+    tracking_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    with _conn() as conn:
+        conn.execute("INSERT INTO transactions (chat_id, amount, tracking_code) VALUES (?, ?, ?)",
+                     (chat_id, amount, tracking_code))
+    return tracking_code
+
+def update_transaction_status(tracking_code: str, status: str):
+    with _conn() as conn:
+        conn.execute("UPDATE transactions SET status = ? WHERE tracking_code = ?", (status, tracking_code))
+
+def get_chat_id_by_tracking_code(tracking_code: str) -> Optional[int]:
+    with _conn() as conn:
+        cur = conn.execute("SELECT chat_id FROM transactions WHERE tracking_code = ?", (tracking_code,))
+        row = cur.fetchone()
+        return int(row[0]) if row else None
+
+def get_amount_by_tracking_code(tracking_code: str) -> Optional[int]:
+    with _conn() as conn:
+        cur = conn.execute("SELECT amount FROM transactions WHERE tracking_code = ?", (tracking_code,))
+        row = cur.fetchone()
+        return int(row[0]) if row else None
+
+
+
+
 
