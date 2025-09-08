@@ -258,6 +258,139 @@ def handle_reject_payment(call):
         _bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
 
 
+# ========== CARDS ==========
+def _init_card_table():
+    with _conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner TEXT NOT NULL,
+                bank TEXT NOT NULL,
+                card_number TEXT NOT NULL
+            )
+        ''')
+        conn.commit()
+
+def _load_cards():
+    global _all_cards
+    with _conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT owner, bank, card_number FROM cards")
+        _all_cards = cursor.fetchall()
+        conn.commit()
+
+def load_cards():  # public
+    _load_cards()
+
+def format_card_list() -> str:
+    if not _all_cards:
+        return "❌ هیچ شماره کارتی ثبت نشده است."
+    lines = []
+    for owner, bank, card_number in _all_cards:
+        lines.append(f"👤 {owner} | 🏦 {bank}\n<code>{card_number}</code>")
+    return "\n\n".join(lines)
+
+def ask_card_number(message, card_data_list: List[dict]):
+    if _check_return_2(message):
+        return
+    text = (message.text or "")
+    if '-' not in text:
+        return _bot.send_message(message.chat.id, "❌ فرمت اشتباه است. (مثال: علی رضایی - بانک ملت)", reply_markup=_back_markup)
+    owner, bank = map(str.strip, text.split('-', 1))
+    card_data_list.append({"owner": owner, "bank": bank})
+    _bot.send_message(message.chat.id, "💳 لطفاً شماره کارت را بدون فاصله ارسال کنید:", reply_markup=_back_markup)
+    _bot.register_next_step_handler(message, confirm_another_card, card_data_list)
+
+def confirm_another_card(message, card_data_list: List[dict]):
+    if _check_return_2(message):
+        return
+    card_number = (message.text or "").strip()
+    if not card_number.isdigit() or len(card_number) != 16:
+        return _bot.send_message(message.chat.id, "❌ شماره کارت باید ۱۶ رقمی و فقط عدد باشد. دوباره ارسال کنید.", reply_markup=_back_markup)
+
+    card_data_list[-1]["card_number"] = card_number
+    markup = _types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add("➕ افزودن کارت دیگر", "✅ اتمام و ذخیره")
+    markup.add("برگشت 🔙")
+    _bot.send_message(message.chat.id, "✅ آیا می‌خواهید کارت دیگری ثبت کنید؟", reply_markup=markup)
+    _bot.register_next_step_handler(message, process_next_step, card_data_list)
+
+def process_next_step(message, card_data_list: List[dict]):
+    if _check_return_2(message):
+        return
+    txt = (message.text or "")
+    if txt == "➕ افزودن کارت دیگر":
+        _bot.send_message(message.chat.id, "👤 مشخصات صاحب کارت و نام بانک را ارسال کنید.\n(مثال: علی رضایی - بانک ملت)")
+        _bot.register_next_step_handler(message, ask_card_number, card_data_list)
+    elif txt == "✅ اتمام و ذخیره":
+        save_cards_to_db(card_data_list)
+        _load_cards()
+        _bot.send_message(message.chat.id, "✅ همه کارت‌ها با موفقیت ذخیره شدند.", reply_markup=_admin_markup)
+    else:
+        _bot.send_message(message.chat.id, "❌ گزینه نامعتبر. لطفاً یکی از گزینه‌ها را انتخاب کنید.", reply_markup=_back_markup)
+        _bot.register_next_step_handler(message, process_next_step, card_data_list)
+
+def save_cards_to_db(cards: List[dict]):
+    with _conn() as conn:
+        cursor = conn.cursor()
+        for card in cards:
+            cursor.execute(
+                "INSERT INTO cards (owner, bank, card_number) VALUES (?, ?, ?)",
+                (card["owner"], card["bank"], card["card_number"])
+            )
+        conn.commit()
+
+def make_delete_card_keyboard():
+    try:
+        conn = _conn()
+        c = conn.cursor()
+        c.execute("SELECT id, card_number FROM cards ORDER BY id")
+        cards = c.fetchall()
+
+        keyboard = []
+        for card_id, card_number in cards:
+            keyboard.append([_types.InlineKeyboardButton(f"{card_number}", callback_data=f"delete_card_{card_id}")])
+        keyboard.append([_types.InlineKeyboardButton("❌ خروج از منوی حذف کارت", callback_data="cancel_delete_card")])
+
+        conn.close()
+        return _types.InlineKeyboardMarkup(keyboard)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return None
+
+def handle_card_deletion(call):
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
+
+    if call.data == "cancel_delete_card":
+        _bot.edit_message_text("❌ منوی حذف کارت بسته شد.", chat_id=chat_id, message_id=message_id)
+        return
+
+    card_id = (call.data or "").split("delete_card_")[1]
+    delete_card_by_id(card_id)
+    _load_cards()
+
+    updated_keyboard = make_delete_card_keyboard()
+    if updated_keyboard:
+        _bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=updated_keyboard)
+
+def delete_card_by_id(card_id: str):
+    try:
+        conn = _conn()
+        c = conn.cursor()
+        c.execute("DELETE FROM cards WHERE id=?", (card_id,))
+        conn.commit()
+        _bot.send_message(_settings.matin, f"✅ شماره کارت با آیدی {card_id} حذف شد.")
+    except Exception:
+        conn.rollback()
+        _send_error_to_admin(traceback.format_exc())
+    finally:
+        conn.close()
+
+
+
+
 
 
 
