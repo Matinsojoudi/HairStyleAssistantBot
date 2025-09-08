@@ -70,6 +70,16 @@ def init_invites_and_content(
 def _conn():
     return sqlite3.connect(_settings.database)
 
+# ================= بازگشت عمومی منو =================
+def check_return_2(message) -> bool:
+    """
+    اگر کاربر «برگشت 🔙» فرستاد به منوی ادمین برمی‌گردد.
+    """
+    if getattr(message, "text", None) == "برگشت 🔙":
+        _bot.send_message(message.chat.id, "به منوی ادمین برگشتید.", reply_markup=_admin_markup)
+        return True
+    return False
+
 # ================= جدول دعوت‌ها =================
 def create_invitations_table():
     with _conn() as conn:
@@ -346,4 +356,159 @@ def send_file_by_type(chat_id: int, file_id: str, file_type: str, caption: Optio
     except Exception:
         _send_error_to_admin(traceback.format_exc()) 
 
-   
+# ================= عملیات لینک حذف فایل =================
+def handle_delete_request(message):
+    if check_return_2(message):
+        return
+
+    link = (message.text or "").strip()
+    tracking_code = extract_tracking_code(link)
+    if not tracking_code:
+        _bot.reply_to(message, "لینک معتبر نیست یا کد پیگیری در آن وجود ندارد. لطفاً دوباره امتحان کنید.", reply_markup=_admin_markup)
+        return
+
+    deleted = delete_file_by_tracking_code(tracking_code)
+    if deleted:
+        _bot.reply_to(message, f"✅ فایل با کد پیگیری {tracking_code} با موفقیت حذف شد.", reply_markup=_admin_markup)
+    else:
+        _bot.reply_to(message, f"❌ فایل با کد پیگیری {tracking_code} پیدا نشد یا قبلاً حذف شده است.", reply_markup=_admin_markup)
+
+# ================= هندل ذخیره‌ی فایل =================
+def handle_file(message):
+    if check_return_2(message):
+        return
+
+    file_type = None
+    file_id = None
+    caption = getattr(message, 'caption', None) or ""
+    chat_id = message.chat.id
+
+    if message.content_type == 'photo':
+        file_type = 'photo'
+        file_id = message.photo[-1].file_id
+    elif message.content_type == 'video':
+        file_type = 'video'
+        file_id = message.video.file_id
+    elif message.content_type == 'audio':
+        file_type = 'audio'
+        file_id = message.audio.file_id
+    elif message.content_type == 'document':
+        file_type = 'document'
+        file_id = message.document.file_id
+    elif message.content_type == 'voice':
+        file_type = 'voice'
+        file_id = message.voice.file_id
+    elif message.content_type == 'video_note':
+        file_type = 'video_note'
+        file_id = message.video_note.file_id
+    elif message.content_type == 'text':
+        file_type = 'text'
+        file_id = "none"
+        caption = message.text
+    else:
+        _bot.send_message(chat_id, "نوع پیام ارسالی پشتیبانی نمی‌شود.", reply_markup=_admin_markup)
+        return
+
+    tracking_code = generate_tracking_code()
+    save_file_to_db(file_id, file_type, caption, tracking_code)
+
+    _bot.reply_to(message, f"✅ فایل شما با موفقیت ذخیره شد.\n{_settings.bot_link}?start=upload_{tracking_code}", reply_markup=_admin_markup)
+
+# ================= جست‌وجوهای کاربر =================
+def search_user_phone_number(chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT phone_number FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_phone_number\n\n{e}")
+        return None
+
+
+def search_user_phone_number_verify(chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT verify FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_phone_number_verify\n\n{e}")
+        return None
+
+
+def search_user_money(chat_id: int) -> Optional[int]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT money FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_money\n\n{e}")
+        return None
+
+
+def search_user_first_name(chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT first_name FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_first_name\n\n{e}")
+        return None
+
+
+def search_user_last_name(chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT last_name FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_last_name\n\n{e}")
+        return None
+
+
+def search_user_username(chat_id: int) -> Optional[str]:
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT user_name FROM users WHERE chat_id=?", (chat_id,))
+            row = c.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        _bot.send_message(_settings.matin, text=f"new error in search_user_username\n\n{e}")
+        return None
+
+
+def request_user_phone_number(chat_id: int):
+    markup = _types.ReplyKeyboardMarkup(resize_keyboard=True)
+    phone_button = _types.KeyboardButton("اشتراک گذاری شماره تلفن", request_contact=True)
+    markup.add(phone_button)
+    _bot.send_message(chat_id, "با استفاده از دکمه زیر شماره تلفن خود را تایید کنید 👇🏻", reply_markup=markup)
+
+
+def update_new_phone_number(chat_id: int, phone_number: str):
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE users SET phone_number = ? WHERE chat_id = ?", (phone_number, chat_id))
+            conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+
+
+def update_new_phone_number_verify(chat_id: int, verify: str):
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE users SET verify = ? WHERE chat_id = ?", (verify, chat_id))
+            conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
