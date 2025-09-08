@@ -52,4 +52,55 @@ def init_services_and_profiles(
 
     create_tables()
 
+# ========== DB ==========
+def _conn():
+    return sqlite3.connect(_settings.database)
+
+def create_tables():
+    """ایجاد تمام جداول مورد نیاز"""
+    try:
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS user_info (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER UNIQUE NOT NULL,
+                full_name TEXT NOT NULL,
+                phone_number TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (chat_id) REFERENCES users(chat_id)
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS staff (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                phone TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS services (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                price REAL NOT NULL,
+                duration INTEGER DEFAULT 60,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                staff_id INTEGER NOT NULL,
+                services TEXT NOT NULL,
+                day TEXT NOT NULL,
+                time_slot TEXT NOT NULL,
+                total_price REAL NOT NULL,
+                status TEXT DEFAULT 'confirmed',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(chat_id),
+                FOREIGN KEY (staff_id) REFERENCES staff(id)
+            )''')
+            conn.commit()
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+
+
+
 
