@@ -254,7 +254,7 @@ def search_user_invited_users(chat_id: int) -> Optional[int]:
             return row[0] if row else None
     except Exception as e:
         _bot.send_message(_settings.matin, text=f"new error in search_user_invited_users\n\n{e}")
-        
+
 # ================= فایل‌های آپلودی =================
 def create_uploaded_files_table():
     try:
@@ -271,4 +271,79 @@ def create_uploaded_files_table():
             """)
             conn.commit()
     except sqlite3.Error:
-        _send_error_to_admin(traceback.format_exc())      
+        _send_error_to_admin(traceback.format_exc())  
+
+def save_file_to_db(file_id: str, file_type: str, caption: str, tracking_code: str):
+    create_uploaded_files_table()
+    try:
+        with _conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO uploaded_files (file_id, file_type, caption, tracking_code)
+                VALUES (?, ?, ?, ?)
+            """, (file_id, file_type, caption, tracking_code))
+            conn.commit()
+    except sqlite3.Error:
+        _send_error_to_admin(traceback.format_exc())
+
+
+def get_file_from_db(tracking_code: str):
+    try:
+        with _conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT file_id, file_type, caption FROM uploaded_files WHERE tracking_code = ?", (tracking_code,))
+            return cursor.fetchone()  # (file_id, file_type, caption) or None
+    except sqlite3.Error:
+        _send_error_to_admin(traceback.format_exc())
+        return None
+
+
+def delete_file_by_tracking_code(tracking_code: str) -> bool:
+    try:
+        with _conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM uploaded_files WHERE tracking_code = ?", (tracking_code,))
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error:
+        _send_error_to_admin(traceback.format_exc())
+        return False
+
+
+def generate_tracking_code(length: int = 10) -> str:
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+
+def extract_tracking_code(link: str) -> Optional[str]:
+    # انتظار:  ?start=upload_XXXXXXXXXX
+    if not link or (not link.startswith(str(_settings.bot_link))):
+        return None
+    try:
+        return link.split("upload_")[1]
+    except IndexError:
+        return None
+
+
+def send_file_by_type(chat_id: int, file_id: str, file_type: str, caption: Optional[str]):
+    caption = (caption or "").strip() or " "
+    try:
+        if file_type == "photo":
+            _bot.send_photo(chat_id, file_id, caption=caption, reply_markup=_main_markup)
+        elif file_type == "video":
+            _bot.send_video(chat_id, file_id, caption=caption, reply_markup=_main_markup)
+        elif file_type == "audio":
+            _bot.send_audio(chat_id, file_id, caption=caption, reply_markup=_main_markup)
+        elif file_type == "document":
+            _bot.send_document(chat_id, file_id, caption=caption, reply_markup=_main_markup)
+        elif file_type == "voice":
+            _bot.send_voice(chat_id, file_id, caption=caption, reply_markup=_main_markup)
+        elif file_type == "video_note":
+            _bot.send_video_note(chat_id, file_id, reply_markup=_main_markup)
+        elif file_type == "text":
+            _bot.send_message(chat_id, caption, reply_markup=_main_markup)
+        else:
+            _bot.send_message(chat_id, "نوع فایل پشتیبانی نمی‌شود.", reply_markup=_main_markup)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc()) 
+
+   
