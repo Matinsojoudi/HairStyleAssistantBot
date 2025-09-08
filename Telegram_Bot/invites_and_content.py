@@ -512,3 +512,154 @@ def update_new_phone_number_verify(chat_id: int, verify: str):
             conn.commit()
     except Exception:
         _send_error_to_admin(traceback.format_exc())
+
+# ================= فلو ساخت کیبورد شیشه‌ای از محتوای کاربر =================
+def handle_content(message):
+    if check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    content_type = message.content_type
+
+    if content_type in ["text", "photo", "video"]:
+        caption = getattr(message, 'caption', None) or "  "
+        # ذخیره‌ی موقت محتوا
+        data: Dict[str, Any] = {"type": content_type, "caption": caption}
+
+        # استخراج file_id بر اساس نوع
+        if content_type == "text":
+            data["text"] = message.text
+        elif content_type == "photo":
+            data["file_id"] = message.photo[-1].file_id
+        elif content_type == "video":
+            data["file_id"] = message.video.file_id
+
+        _contents[chat_id] = data
+        _keyboards.setdefault(chat_id, [])
+
+        _bot.send_message(chat_id, "محتوا دریافت شد. حالا لطفاً عنوان کلید شیشه‌ای را وارد کنید (حداکثر 50 کاراکتر).", reply_markup=_back_markup)
+        _bot.register_next_step_handler(message, handle_title)
+    else:
+        msg = _bot.send_message(chat_id, "فقط متن، تصویر یا ویدیو مجاز است. لطفاً دوباره تلاش کنید.", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, handle_content)
+
+
+def handle_title(message):
+    if check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    title = message.text or ""
+
+    if len(title) > 50:
+        msg = _bot.send_message(chat_id, "عنوان نمی‌تواند بیش از 50 کاراکتر باشد. لطفاً دوباره تلاش کنید.", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, handle_title)
+    else:
+        _bot.send_message(chat_id, "عنوان دریافت شد. حالا لطفاً لینک مربوط به کلید شیشه‌ای را ارسال کنید.", reply_markup=_back_markup)
+        _bot.register_next_step_handler(message, handle_link, title)
+
+
+def handle_link(message, title: str):
+    if check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    link = (message.text or "").strip()
+
+    if link.startswith("http://") or link.startswith("https://"):
+        content = _contents.get(chat_id)
+        if content:
+            _keyboards[chat_id].append({"title": title, "link": link, "content": content})
+
+        markup = _types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        markup.add("اتمام و انتخاب آیدی", "عنوان بعدی")
+        _bot.send_message(chat_id, "لینک دریافت شد. جهت اتمام، «اتمام و انتخاب آیدی» یا برای دکمهٔ جدید «عنوان بعدی» را انتخاب کنید.", reply_markup=markup)
+        _bot.register_next_step_handler(message, handle_finish_or_next)
+    else:
+        msg = _bot.send_message(chat_id, "لینک وارد شده معتبر نیست. لطفاً دوباره تلاش کنید.", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, handle_link, title)
+
+
+def handle_finish_or_next(message):
+    if check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    text = message.text or ""
+
+    if text == "اتمام و انتخاب آیدی":
+        msg = _bot.send_message(chat_id, "یک پیام از گروه/کانال مقصد فوروارد کنید یا آیدی عددی مقصد را ارسال کنید. (ربات باید ادمین باشد)", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, process_forwarded_message)
+    elif text == "عنوان بعدی":
+        msg = _bot.send_message(chat_id, "عنوان بعدی کلید شیشه‌ای را وارد کنید (حداکثر 50 کاراکتر).", reply_markup=_back_markup)
+        _bot.register_next_step_handler(msg, handle_title)
+    else:
+        msg = _bot.send_message(chat_id, "گزینه معتبر نیست. لطفاً دوباره تلاش کنید.")
+        _bot.register_next_step_handler(msg, handle_finish_or_next)
+
+
+def process_forwarded_message(message):
+    if check_return_2(message):
+        return
+
+    chat_id = message.chat.id
+    if getattr(message, "forward_from_chat", None):
+        destination_id = message.forward_from_chat.id
+        send_keyboard(chat_id, destination_id)
+    else:
+        try:
+            destination_id = int(message.text)
+            send_keyboard(chat_id, destination_id)
+        except (TypeError, ValueError):
+            msg = _bot.send_message(chat_id, "آیدی وارد شده معتبر نیست. لطفاً یک پیام را فوروارد کنید یا آیدی عددی معتبر وارد کنید.")
+            _bot.register_next_step_handler(msg, process_forwarded_message)
+
+
+def send_keyboard(chat_id: int, destination_id: int):
+    try:
+        # ساخت کیبورد
+        markup = _types.InlineKeyboardMarkup()
+        for btn in _keyboards.get(chat_id, []):
+            markup.add(_types.InlineKeyboardButton(text=btn["title"], url=btn["link"]))
+
+        # ارسال محتوا با کیبورد
+        content = _contents.get(chat_id)
+        if content:
+            ctype = content.get("type")
+            caption = content.get("caption") or " "
+            if ctype == "photo":
+                _bot.send_photo(destination_id, content["file_id"], caption=caption, reply_markup=markup)
+            elif ctype == "video":
+                _bot.send_video(destination_id, content["file_id"], caption=caption, reply_markup=markup)
+            else:
+                _bot.send_message(destination_id, content.get("text", ""), reply_markup=markup)
+
+        _bot.send_message(chat_id, "کلیدهای شیشه‌ای ارسال شد.", reply_markup=_admin_markup)
+
+        # پاکسازی استیت
+        _contents.pop(chat_id, None)
+        _keyboards.pop(chat_id, None)
+
+    except Exception:
+        _bot.send_message(chat_id, "خطا در ارسال کلیدها", reply_markup=_admin_markup)
+        _send_error_to_admin(traceback.format_exc())
+
+# ================= کیبورد عضویت همراه لینک دعوت =================
+def make_channel_id_keyboard_invited_link(inviter_link: str):
+    try:
+        keyboard = []
+        with _conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT button_name, link FROM channels ORDER BY id DESC LIMIT 10")
+            latest_channels = c.fetchall()
+
+        for name, link in latest_channels:
+            keyboard.append([_types.InlineKeyboardButton(name, url=link)])
+
+        # دکمه‌ی «عضو شدم» با لینک دعوت دینامیک
+        keyboard.append([InlineKeyboardButton("✅ عضو شدم!", url=f"{_settings.bot_link}?start={inviter_link}")])
+
+        return _types.InlineKeyboardMarkup(keyboard)
+    except Exception:
+        _send_error_to_admin(traceback.format_exc())
+        return None
