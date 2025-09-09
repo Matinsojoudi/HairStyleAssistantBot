@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 # تنظیمات barbershop
 SECRET_TOKEN = "CHANGE_ME_TOKEN"
-BARBERSHOP_DB_PATH = "CHANGE_ME.db"
+BARBERSHOP_DB_PATH = "HairStyleAssistantBot.db"
 
 @app.route('/api/new_reservation', methods=["POST"])
 def receive_new_reservation():
