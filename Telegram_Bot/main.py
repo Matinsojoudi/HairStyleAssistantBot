@@ -1471,3 +1471,559 @@ def edit_staff_menu(message):
     except Exception as e:
         bot.send_message(chat_id, f"❌ خطا در نمایش پرسنل: {e}", reply_markup=admin_markup)
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_staff_menu_'))
+def edit_staff_options(call):
+    chat_id = call.message.chat.id
+    staff_id = int(call.data.split('_')[3])
+    
+    try:
+        with sqlite3.connect(settings.database) as conn:
+            c = conn.cursor()
+            c.execute("SELECT name FROM staff WHERE id=?", (staff_id,))
+            result = c.fetchone()
+            
+            if not result:
+                bot.answer_callback_query(call.id, "❌ پرسنل یافت نشد")
+                return
+            
+            staff_name = result[0]
+            
+            # بررسی وجود رزرو برای این پرسنل
+            c.execute("SELECT COUNT(*) FROM reservations WHERE staff_id=?", (staff_id,))
+            reservation_count = c.fetchone()[0]
+            
+            markup = telebot.types.InlineKeyboardMarkup()
+            markup.add(telebot.types.InlineKeyboardButton(
+                "📝 تغییر نام", 
+                callback_data=f"edit_staff_name_{staff_id}"
+            ))
+            
+            if reservation_count == 0:
+                markup.add(telebot.types.InlineKeyboardButton(
+                    "🗑️ حذف پرسنل", 
+                    callback_data=f"delete_staff_{staff_id}"
+                ))
+            else:
+                markup.add(telebot.types.InlineKeyboardButton(
+                    "⚠️ حذف غیرممکن (دارای رزرو)", 
+                    callback_data="cannot_delete_staff"
+                ))
+            
+            markup.add(telebot.types.InlineKeyboardButton(
+                "برگشت 🔙", 
+                callback_data="back_to_edit_staff"
+            ))
+            
+            warning_text = ""
+            if reservation_count > 0:
+                warning_text = f"\n\n⚠️ <b>توجه:</b> این پرسنل {reservation_count} رزرو فعال دارد"
+            
+            bot.edit_message_text(
+                f"👨‍💼 <b>ویرایش پرسنل</b>\n\n"
+                f"👤 <b>نام فعلی:</b> {staff_name}{warning_text}\n\n"
+                f"عملیات مورد نظر را انتخاب کنید:",
+                chat_id, call.message.message_id, 
+                parse_mode="HTML", reply_markup=markup
+            )
+            
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"خطا: {e}")
+
+# تغییر نام پرسنل
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_staff_name_'))
+def edit_staff_name(call):
+    chat_id = call.message.chat.id
+    staff_id = int(call.data.split('_')[3])
+    
+    bot.edit_message_text(
+        "📝 <b>تغییر نام پرسنل</b>\n\n"
+        "نام جدید پرسنل را وارد کنید:",
+        chat_id, call.message.message_id, parse_mode="HTML"
+    )
+    
+    msg = bot.send_message(chat_id, "👇 نام جدید:", reply_markup=back_markup)
+    bot.register_next_step_handler(msg, lambda m: save_new_staff_name(m, staff_id))
+
+def save_new_staff_name(message, staff_id):
+    if check_return(message):
+        return
+    
+    chat_id = message.chat.id
+    new_name = message.text.strip()
+    
+    if len(new_name) < 2:
+        msg = bot.send_message(chat_id, "❌ نام پرسنل باید حداقل 2 کاراکتر باشد. مجدداً وارد کنید:", 
+                              reply_markup=back_markup)
+        bot.register_next_step_handler(msg, lambda m: save_new_staff_name(m, staff_id))
+        return
+    
+    try:
+        with sqlite3.connect(settings.database) as conn:
+            c = conn.cursor()
+            
+            # دریافت نام قبلی
+            c.execute("SELECT name FROM staff WHERE id=?", (staff_id,))
+            old_name = c.fetchone()[0]
+            
+            # به‌روزرسانی نام
+            c.execute("UPDATE staff SET name=? WHERE id=?", (new_name, staff_id))
+            conn.commit()
+            
+            bot.send_message(chat_id, 
+                           f"✅ <b>نام پرسنل با موفقیت تغییر یافت</b>\n\n"
+                           f"👤 نام قبلی: {old_name}\n"
+                           f"👤 نام جدید: {new_name}", 
+                           parse_mode="HTML", reply_markup=admin_markup)
+            
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ خطا در تغییر نام: {e}", reply_markup=admin_markup)
+
+# حذف پرسنل
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_staff_'))
+def delete_staff_confirm(call):
+    chat_id = call.message.chat.id
+    staff_id = int(call.data.split('_')[2])
+    
+    try:
+        with sqlite3.connect(settings.database) as conn:
+            c = conn.cursor()
+            c.execute("SELECT name FROM staff WHERE id=?", (staff_id,))
+            result = c.fetchone()
+            
+            if not result:
+                bot.answer_callback_query(call.id, "❌ پرسنل یافت نشد")
+                return
+            
+            staff_name = result[0]
+            
+            markup = telebot.types.InlineKeyboardMarkup()
+            markup.row(
+                telebot.types.InlineKeyboardButton(
+                    "✅ بله، حذف کن", 
+                    callback_data=f"confirm_delete_staff_{staff_id}"
+                ),
+                telebot.types.InlineKeyboardButton(
+                    "❌ لغو", 
+                    callback_data=f"edit_staff_menu_{staff_id}"
+                )
+            )
+            
+            bot.edit_message_text(
+                f"🗑️ <b>تایید حذف پرسنل</b>\n\n"
+                f"👤 <b>نام:</b> {staff_name}\n\n"
+                f"⚠️ <b>هشدار:</b> این عمل غیرقابل بازگشت است!\n\n"
+                f"آیا مطمئن هستید که می‌خواهید این پرسنل را حذف کنید؟",
+                chat_id, call.message.message_id, 
+                parse_mode="HTML", reply_markup=markup
+            )
+            
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"خطا: {e}")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_delete_staff_'))
+def confirm_delete_staff(call):
+    chat_id = call.message.chat.id
+    staff_id = int(call.data.split('_')[3])
+    
+    try:
+        with sqlite3.connect(settings.database) as conn:
+            c = conn.cursor()
+            
+            # دریافت اطلاعات پرسنل قبل از حذف
+            c.execute("SELECT name FROM staff WHERE id=?", (staff_id,))
+            result = c.fetchone()
+            
+            if not result:
+                bot.answer_callback_query(call.id, "❌ پرسنل یافت نشد")
+                return
+            
+            staff_name = result[0]
+            
+            # بررسی مجدد عدم وجود رزرو
+            c.execute("SELECT COUNT(*) FROM reservations WHERE staff_id=?", (staff_id,))
+            if c.fetchone()[0] > 0:
+                bot.answer_callback_query(call.id, "❌ این پرسنل دارای رزرو فعال است")
+                return
+            
+            # حذف پرسنل
+            c.execute("DELETE FROM staff WHERE id=?", (staff_id,))
+            conn.commit()
+            
+            bot.edit_message_text(
+                f"✅ <b>پرسنل با موفقیت حذف شد</b>\n\n"
+                f"👤 پرسنل حذف شده: {staff_name}",
+                chat_id, call.message.message_id, parse_mode="HTML"
+            )
+            
+            bot.send_message(chat_id, "🔙 بازگشت به پنل ادمین", reply_markup=admin_markup)
+            
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"خطا در حذف: {e}")
+
+# کال‌بک‌های بازگشت
+@bot.callback_query_handler(func=lambda call: call.data == 'back_to_admin')
+def back_to_admin_panel(call):
+    chat_id = call.message.chat.id
+    bot.edit_message_text("🔙 بازگشت به پنل ادمین", chat_id, call.message.message_id)
+    bot.send_message(chat_id, "🏠 پنل مدیریت", reply_markup=admin_markup)
+
+@bot.callback_query_handler(func=lambda call: call.data == 'back_to_edit_services')
+def back_to_edit_services_menu(call):
+    chat_id = call.message.chat.id
+    edit_services_menu(type('obj', (object,), {'chat': type('obj', (object,), {'id': chat_id}), 'text': "✏️ ویرایش خدمات"})())
+
+@bot.callback_query_handler(func=lambda call: call.data == 'back_to_edit_staff')
+def back_to_edit_staff_menu(call):
+    chat_id = call.message.chat.id
+    edit_staff_menu(type('obj', (object,), {'chat': type('obj', (object,), {'id': chat_id}), 'text': "👨‍💼 ویرایش پرسنل"})())
+
+@bot.callback_query_handler(func=lambda call: call.data == 'cannot_delete_staff')
+def cannot_delete_staff_warning(call):
+    bot.answer_callback_query(call.id, "❌ نمی‌توان پرسنلی را که دارای رزرو فعال است حذف کرد", show_alert=True)
+    
+
+def get_service_emoji(name):
+    name = name.lower()
+    if "کوتاه" in name or "مو" in name:
+        return "💇‍♂️"
+    elif "ریش" in name:
+        return "🧔"
+    elif "اصلاح" in name:
+        return "✂️"
+    elif "ماسک" in name or "صورت" in name:
+        return "🧖‍♂️"
+    elif "رنگ" in name:
+        return "🎨"
+    elif "کراتین" in name:
+        return "💆‍♂️"
+    else:
+        return "🔹"
+
+@bot.message_handler(commands=['reset_rezerv'])
+def manual_reset_rezerv(message):
+    if str(message.chat.id) in [str(x) for x in settings.admin_list]:
+        reset_weekly_reservations()
+        bot.send_message(message.chat.id, "ریست دستی رزروها اجرا شد.")
+    else:
+        bot.send_message(message.chat.id, "شما ادمین نیستید.")
+
+
+@bot.message_handler(commands=['help'])
+def handle_help_command(message):
+    bot.send_message(message.chat.id, help_msg, parse_mode="HTML", reply_markup=main_markup)
+    
+@bot.message_handler(commands=['rezerv'])
+def handle_rezerv_command(message):
+    new_reservation(message)
+
+@bot.message_handler(commands=['invite'])
+def handle_invite_command(message):
+    get_invite_link(message)
+
+@bot.message_handler(commands=['start'])
+def handle_start(message):
+    if not is_bot_active():
+        return
+
+    must_join_keyboard = make_channel_id_keyboard()
+    Chat = message.chat.id
+    Chat_id = message.from_user.id
+    first_name = message.from_user.first_name if message.from_user.first_name else " "
+    last_name = message.from_user.last_name if message.from_user.last_name else " "
+    username = message.from_user.username if message.from_user.username else " "
+    save_info(Chat, first_name, last_name, Chat_id, username)
+
+    if len(message.text.split(" ")) > 1:
+        temp_invite[Chat_id] = {}
+        hidden_start_msg = message.text.split(" ")[1]
+        temp_invite[Chat_id]['hidden_start_msg'] = hidden_start_msg
+
+    try:
+        if (int(Chat_id) in settings.admin_list) or (int(Chat_id) in get_admin_ids()):
+            if len(message.text.split(" ")) > 1:
+                hidden_start_msg = message.text.split(" ")[1]
+                handle_hidden_start_msgs(hidden_start_msg, Chat_id, message)
+            else:
+                save_info(Chat, first_name, last_name, Chat_id, username)
+                bot.send_message(message.chat.id, text=f"Welcome {first_name}, you are Admin 🦾",
+                            reply_markup=admin_markup)
+
+        elif is_member_in_all_channels(Chat_id):
+            if not is_verify_active():
+                # اگر وریفای فعال نیست، همان رفتار قبلی را ادامه بده
+                if len(message.text.split(" ")) > 1:
+                    hidden_start_msg = message.text.split(" ")[1]
+                    handle_hidden_start_msgs(hidden_start_msg, Chat_id, message)
+                else:
+                    bot.send_message(
+                        Chat_id, 
+                        text=welcome_msg, 
+                        parse_mode="HTML",
+                        reply_markup=main_markup
+                    )
+                return
+
+            # اگر وریفای فعال است، ابتدا شماره تلفن را بررسی کن
+            if search_user_phone_number(Chat_id) != "None":
+                if search_user_phone_number_verify(Chat_id) == "IRAN":
+                    if len(message.text.split(" ")) > 1:
+                        hidden_start_msg = message.text.split(" ")[1]
+                        handle_hidden_start_msgs(hidden_start_msg, Chat_id, message)
+                    else:
+                        bot.send_message(
+                            Chat_id, 
+                            text=welcome_msg, 
+                            parse_mode="HTML",
+                            reply_markup=main_markup
+                        )
+                else:
+                    bot.send_message(chat_id=Chat_id, text="شماره شما باید متعلق به ایران باشد.")
+            else:
+                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+                phone_button = types.KeyboardButton("اشتراک گذاری شماره تلفن", request_contact=True)
+                markup.add(phone_button)
+                bot.send_message(
+                    chat_id=Chat_id,
+                    text="""
+📞 تایید شماره تلفن‌
+
+🔐 جهت اطمینان از واقعی بودن حساب، نیاز به تایید شماره تلفن دارید.
+
+❗️هیچگونه اطلاعاتی ثبت یا ذخیره نمی‌شود و فقط برای بررسی فیک نبودن اکانت شما این مرحله انجام می‌گردد.
+""",
+                    reply_markup=markup
+                )
+
+        else:
+            if len(message.text.split(" ")) > 1:
+                user_bot_link = message.text.split(" ")[1]
+                must_join_keyboard_inviter_link = make_channel_id_keyboard_invited_link(user_bot_link)
+                bot.send_message(Chat_id, text=f"""
+سلام {first_name} عزیز، خیلی خوش اومدی🧡
+جهت استفاده از ربات تو کانال ما عضو باش
+""", reply_markup=must_join_keyboard_inviter_link, parse_mode="HTML")
+
+            else:
+                bot.send_message(Chat_id, text=f"""
+سلام {first_name} عزیز، خیلی خوش اومدی🧡
+جهت استفاده از ربات تو کانال ما عضو باش
+
+⭕️بعد از عضو شدن لطفا دکمه /start را دوباره بزن.
+""", reply_markup=must_join_keyboard, parse_mode="HTML")
+
+    except Exception as e:
+        send_error_to_admin(traceback.format_exc())
+    
+
+@bot.callback_query_handler(func=lambda call: True)
+def call(call):
+    Chat_id = call.message.chat.id
+    Msg_id = call.message.message_id
+    if call.data == "verify_request":
+        phone_number = search_user_phone_number(Chat_id)
+        verify = search_user_phone_number_verify(Chat_id)
+        if phone_number != "None":
+            if verify == "IRAN":
+                bot.send_message(chat_id=Chat_id, text="اکانت شما با موفقیت تایید هویت شده است")
+            else:
+                bot.send_message(Chat_id,
+                                 "⚠️ درحال حاضر این قابلیت برای کاربران ایرانی 🇮🇷 با پیش شماره 98  فعال می‌باشد.  اگر از شماره مجازی استفاده میکنید و در کشور های خارجه سکونت دارید به پشتیبانی مراجعه کنید.")
+        else:
+            request_user_phone_number(Chat_id)
+    
+    elif call.data.startswith("add_"):
+        handle_amount_selection(call)
+        
+    elif call.data.startswith("confirm_"):
+        handle_confirm_payment(call)
+        
+    elif call.data.startswith("notconfirm_"):
+        handle_reject_payment(call)
+        
+    elif call.data.startswith("delete_card_") or call.data == "cancel_delete_card":
+        handle_card_deletion(call)
+        
+    elif call.data.startswith('delete_button_1'):
+        bot.delete_message(chat_id=Chat_id, message_id=Msg_id)
+
+    elif call.data.startswith('delete_button_'):
+        bot.delete_message(chat_id=Chat_id, message_id=Msg_id)
+
+    elif call.data.startswith('delete_row_admin_'):
+        news_id = call.data.split('delete_row_admin_')[1]
+        delete_admin_by_id(news_id)
+        delete_list_question_keyboard = make_delete_admin_list_keyboard()
+        bot.edit_message_reply_markup(chat_id=Chat_id, message_id=Msg_id,
+                                        reply_markup=delete_list_question_keyboard)
+
+    elif call.data.startswith('delete_row_'):
+        news_id = call.data.split('delete_row_')[1]
+        delete_channel_by_id(news_id)
+        delete_list_question_keyboard = make_delete_channel_id_keyboard()
+        bot.edit_message_reply_markup(chat_id=Chat_id, message_id=Msg_id, reply_markup=delete_list_question_keyboard)
+
+
+    elif call.data == "joined":
+        Chat_id = call.from_user.id
+        first_name = call.from_user.first_name if call.from_user.first_name else " "
+        last_name = call.from_user.last_name if call.from_user.last_name else " "
+        username = call.from_user.username if call.from_user.username else " "
+        if is_member_in_all_channels(Chat_id):
+            save_info(Chat_id, first_name, last_name, call.message.chat.id, username)
+            bot.send_message(Chat_id, text="""
+✅ عضویت شما تایید شد
+
+به ربات ما خوش اومدی و حالا میتونی برای استفاده از ربات از دکمه های زیر کمک بگیری 👇
+""", reply_markup=main_markup)
+
+        else:
+            bot.send_message(Chat_id, text=f""" 
+جهت استفاده از ربات و حمایت از تیم ما لطفا تو چنل های زیر عضو باش
+
+⭕️بعد از عضو شدن لطفا دکمه /start را دوباره بزن.""", reply_markup=make_channel_id_keyboard())
+
+
+    elif call.data.startswith('delete_button_'):
+        user_id = call.data.split("delete_button_")[1]
+        bot.delete_message(chat_id=Chat_id, message_id=Msg_id)
+
+    elif call.data.startswith('delete_2button_'):
+        user_id = call.data.split("delete_2button_")[1]
+        bot.delete_message(chat_id=Chat_id, message_id=Msg_id - 1)
+        bot.delete_message(chat_id=Chat_id, message_id=Msg_id)
+
+    elif call.data == "noop":
+        bot.answer_callback_query(call.id, text="✅", show_alert=False)
+        return
+
+
+@bot.message_handler(content_types=['contact'])
+def handle_contact(message):
+    if not is_bot_active():
+        return
+    must_join_channels = make_channel_id_keyboard()
+
+    chat_id = message.chat.id
+    # فقط شماره‌ای که متعلق به خود کاربر است (یعنی contact.user_id == chat_id) را قبول کن
+    if message.contact is not None and message.contact.user_id == chat_id:
+        phone_number = str(message.contact.phone_number)
+        update_new_phone_number(chat_id, phone_number)
+        bot.send_message(settings.matin, text=f"""New phone number added\n{phone_number}""")
+        if phone_number[:3] == "+98" or phone_number[:2] == "98" or phone_number[:3] == " 98":
+            update_new_phone_number_verify(chat_id, "IRAN")
+            bot.send_message(chat_id, "شماره شما تایید و ایرانی تشخیص داده شد ✅", reply_markup=main_markup)
+        else:
+            update_new_phone_number_verify(chat_id, "FAKE")
+            bot.send_message(chat_id, "شماره شما ایرانی نیست یا معتبر تشخیص داده نشد.", reply_markup=main_markup)
+    else:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        phone_button = types.KeyboardButton("اشتراک گذاری شماره تلفن", request_contact=True)
+        markup.add(phone_button)
+        bot.send_message(
+            message.chat.id,
+            "فقط شماره تلفن متعلق به خودتان را می‌توانید ارسال کنید. لطفاً از دکمه زیر برای اشتراک‌گذاری شماره استفاده کنید.",
+            reply_markup=markup
+        )
+
+    if chat_id in temp_invite:
+        bot.send_message(message.chat.id, text=""" 
+جهت استفاده از ربات و حمایت از تیم ما لطفا در چنل های زیر عضو باش
+
+⭕️بعد از عضویت دکمه "✅ عضو شدم" رو بزنید.""", reply_markup=make_channel_id_keyboard_invited_link(temp_invite[chat_id]['hidden_start_msg']))
+    else:
+        bot.send_message(message.chat.id, text=""" 
+جهت استفاده از ربات و حمایت از تیم ما لطفا در چنل های زیر عضو باش
+
+⭕️بعد از عضویت دکمه "✅ عضو شدم" رو بزنید.""", reply_markup=must_join_channels)
+        
+
+
+@bot.message_handler(func=lambda message: message.text == "♻️ تعرفه ها")
+def show_tariffs(message):
+    chat_id = message.chat.id
+
+    try:
+        with sqlite3.connect(settings.database) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, price FROM services WHERE is_active = 1 ORDER BY price ASC")
+            services = cursor.fetchall()
+
+        if not services:
+            bot.send_message(chat_id, "⚠️ هیچ خدمتی ثبت نشده است.")
+            return
+
+        msg = "<b>💈 تعرفه خدمات آرایشگاه امین:</b>\n\n"
+        for name, price in services:
+            emoji = get_service_emoji(name)
+            msg += f"{emoji} <b>{name}</b>: <code>{int(price):,}</code> تومان\n"
+
+        bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=main_markup)
+
+    except Exception as e:
+        send_error_to_admin(f"❌ خطا در دریافت تعرفه‌ها:\n<code>{e}</code>", parse_mode="HTML")
+
+
+
+@bot.message_handler(func=lambda message: message.text in ["👤 پروفایل من", "👤 حساب کاربری"])
+def combined_profile_view(message):
+    chat_id = message.chat.id
+
+    if not is_bot_active():
+        return
+
+    try:
+        # بررسی عضویت در کانال
+        must_join_channels = make_channel_id_keyboard()
+        if not (is_member_in_all_channels(chat_id) or chat_id in settings.admin_list or chat_id in get_admin_ids()):
+            bot.send_message(chat_id, """ 
+جهت استفاده از ربات و مشاهده پروفایل، ابتدا در کانال‌های زیر عضو شوید 👇
+
+⭕️ پس از عضویت، روی "✅ عضو شدم!" بزنید.
+            """, reply_markup=must_join_channels)
+            return
+
+        # اتصال به دیتابیس و واکشی اطلاعات
+        with sqlite3.connect(settings.database) as conn:
+            c = conn.cursor()
+            c.execute("SELECT first_name, last_name, user_name, money, joined_at FROM users WHERE chat_id=?", (chat_id,))
+            result = c.fetchone()
+
+            if not result:
+                bot.send_message(chat_id, "❌ اطلاعات کاربری یافت نشد", reply_markup=main_markup)
+                return
+
+            first_name, last_name, user_name, db_money, joined_at = result
+            full_name = f"{first_name} {last_name or ''}".strip()
+            username = f"@{user_name}" if user_name else "ندارد"
+
+            # تعداد رزروها
+            c.execute("SELECT COUNT(*) FROM reservations WHERE user_id=?", (chat_id,))
+            reservation_count = c.fetchone()[0]
+
+        # اطلاعات دعوت‌ها
+        invited_users = search_user_invited_users(str(chat_id))
+        join_date = search_user_join_date(str(chat_id)) or joined_at
+        # تبدیل امن به عدد صحیح
+        money = int(search_user_money(str(chat_id)) or db_money or 0)
+
+        # ساخت کیبورد اینلاین شیک
+        buttons = [
+            [InlineKeyboardButton(f"{full_name}", url=settings.bot_link), InlineKeyboardButton("📝 نام کامل", url=settings.bot_link)],
+            [InlineKeyboardButton(str(chat_id), url=settings.bot_link), InlineKeyboardButton("شناسه کاربری", url=settings.bot_link)],
+            [InlineKeyboardButton(f"{money:,} تومان", url=settings.bot_link), InlineKeyboardButton("💰 موجودی", url=settings.bot_link)],
+            [InlineKeyboardButton(join_date, url=settings.bot_link), InlineKeyboardButton("📅 تاریخ عضویت", url=settings.bot_link)],
+            [InlineKeyboardButton(f"{reservation_count} عدد", url=settings.bot_link), InlineKeyboardButton("🗓️ تعداد رزرو", url=settings.bot_link)],
+            [InlineKeyboardButton(f"{invited_users} نفر", url=settings.bot_link), InlineKeyboardButton("✅ کاربران دعوت‌شده", url=settings.bot_link)]
+        ]
+        keyboard = InlineKeyboardMarkup(buttons)
+
+        # ارسال پیام پروفایل
+        bot.send_message(chat_id, f"""👤 <b>پروفایل شما</b>
+
+برای مدیریت حساب خود از دکمه‌های زیر استفاده کنید:
+        """, parse_mode="HTML", reply_markup=keyboard)
+
+    except Exception as e:
+        send_error_to_admin(f"❌ خطا در پروفایل کاربر {chat_id}:\n{e}")
+
+
