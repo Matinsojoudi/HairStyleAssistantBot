@@ -117,7 +117,7 @@ def get_all_data():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/Amin_barbershop1369_bot')
+@app.route('/HairStyleAssistantBot')
 def barbershop_panel():
     if os.path.exists("templates/barbershop.html"):
         return render_template('barbershop.html')
