@@ -2535,7 +2535,7 @@ def update_server_any_thing():
 
         try:
             resp = requests.post(
-                "https://api.telbotland.ir/api/sync_full_data",
+                "https://app.telbotland.ir/api/sync_full_data",
                 json=payload,
                 headers=headers,
                 timeout=10
